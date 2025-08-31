@@ -1,0 +1,30 @@
+# VS Code settings
+.vscode/
+.idea/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Python cache & envs
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.env
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Dafny/Z3 binaries
+*.dll
+*.exe
+*.out
+*.obj
+*.bin
+*.bc
