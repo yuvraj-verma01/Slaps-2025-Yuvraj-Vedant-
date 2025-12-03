@@ -1,0 +1,35 @@
+{
+  "method_name": "Sum",
+  "loops": [
+    {
+      "type": "while",
+      "condition": "i <= n",
+      "variables": [
+        "i",
+        "sum"
+      ],
+      "invariants": [
+        "0 <= i <= n + 1",
+        "sum == i * (i - 1) / 2"
+      ]
+    }
+  ],
+  "preconditions": [
+    "n >= 0"
+  ],
+  "postconditions": [
+    "result == n * (n + 1) / 2"
+  ],
+  "parameters": [
+    {
+      "name": "n",
+      "type": "int"
+    }
+  ],
+  "returns": [
+    {
+      "name": "result",
+      "type": "int"
+    }
+  ]
+}
