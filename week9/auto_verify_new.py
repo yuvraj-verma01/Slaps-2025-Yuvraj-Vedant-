@@ -6,11 +6,7 @@ import pathlib
 import re
 import subprocess
 import sys
-from typing import List, Dict, Optional
-
-# ------------------------------------------------------------
-# Path setup so imports Just Work
-# ------------------------------------------------------------
+from typing import Dict, List, Optional
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -27,7 +23,7 @@ except ImportError:
 
 # Try Week 9 invariants first (linear_invariants_new in week9)
 try:
-    import linear_invariants_new as linv  # type: ignore
+    import week9.bool_linear_invariants as linv  # type: ignore
 except ImportError:
     # Fallback to week6 implementation name if user didn't rename
     try:
