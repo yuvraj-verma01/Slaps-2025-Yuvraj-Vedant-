@@ -1,0 +1,40 @@
+{
+  "methods": [
+    {
+      "method_name": "ThreeModeCounter",
+      "preconditions": [],
+      "postconditions": [],
+      "parameters": [
+        {
+          "name": "n",
+          "type": "int"
+        }
+      ],
+      "returns": [
+        {
+          "name": "x",
+          "type": "int"
+        },
+        {
+          "name": "y",
+          "type": "int"
+        },
+        {
+          "name": "mode",
+          "type": "int"
+        }
+      ],
+      "loops": [
+        {
+          "type": "while",
+          "condition": "i < n",
+          "variables": ["x", "y", "mode", "i"],
+          "invariants": [],
+          "synthesized_invariants": [
+            "(mode <= 0 && -mode <= 0 && y - x <= 0 && x - y <= 0) || (mode <= 1 && -mode <= -1 && y - x <= 1 && x - y <= -1) || (mode <= 2 && -mode <= -2 && y - x <= 2 && x - y <= -2)"
+          ]
+        }
+      ]
+    }
+  ]
+}

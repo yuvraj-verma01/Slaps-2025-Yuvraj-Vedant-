@@ -1,0 +1,40 @@
+{
+  "methods": [
+    {
+      "method_name": "OffsetToggle",
+      "preconditions": [],
+      "postconditions": [],
+      "parameters": [
+        {
+          "name": "n",
+          "type": "int"
+        }
+      ],
+      "returns": [
+        {
+          "name": "a",
+          "type": "int"
+        },
+        {
+          "name": "b",
+          "type": "int"
+        },
+        {
+          "name": "flag",
+          "type": "int"
+        }
+      ],
+      "loops": [
+        {
+          "type": "while",
+          "condition": "i < n",
+          "variables": ["a", "b", "flag", "i"],
+          "invariants": [],
+          "synthesized_invariants": [
+            "(flag <= 0 && -flag <= 0 && b - a <= 0 && a - b <= 0) || (flag <= 1 && -flag <= -1 && b - a <= 2 && a - b <= -2)"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,14 +1,20 @@
-method ToggleY() returns (y:int)
-{
-  y := 0;
-  var i := 0;
-
-  while i < 4
-    invariant 0 <= i <= 4
-    invariant y == 0 || y == 1
-    decreases 4 - i
-  {
-    y := 1 - y;
-    i := i + 1;
-  }
-}
+method Toggle()
+    {
+        var i := 0;
+        var x := 0;
+        var y := 0;
+        var flip := 0;
+        while (i < 4) 
+        {
+            if (flip == 0) {
+                x := x + 1;
+                y := y + 2;
+                flip := 1;
+            } else {
+                x := x + 2;
+                y := y + 1;
+                flip := 0;
+            }
+            i := i + 1;
+        }
+    }
