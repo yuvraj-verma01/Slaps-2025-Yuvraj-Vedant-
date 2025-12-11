@@ -10,24 +10,20 @@ from typing import Dict, List, Optional
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# Make week5, week6, week9 importable
 sys.path.append(str(ROOT / "week5"))
 sys.path.append(str(ROOT / "week6"))
 sys.path.append(str(ROOT / "week9"))
 
-# Week 5 parser (optional)
 try:
     import parser as week5_parser  # type: ignore
 except ImportError:
     week5_parser = None
 
-# Try Week 9 invariants first (linear_invariants_new in week9)
 try:
-    import week9.bool_linear_invariants as linv  # type: ignore
+    import week9.bool_linear_invariants as linv  
 except ImportError:
-    # Fallback to week6 implementation name if user didn't rename
     try:
-        import linear_invariants as linv  # type: ignore
+        import linear_invariants as linv  
     except ImportError:
         print(
             "[auto_verify_new] ERROR: Could not import 'linear_invariants_new' or 'linear_invariants'.\n"
@@ -36,9 +32,19 @@ except ImportError:
         sys.exit(1)
 
 
-# ------------------------------------------------------------
-# Load / compute method summary
-# ------------------------------------------------------------
+
+# Load method summary
+
+
+def _normalize_summary(raw: Dict) -> Dict:
+    """Normalize Week 5 outputs into the single-method shape linv expects."""
+    if hasattr(linv, "adapt_method_summary"):
+        try:
+            return linv.adapt_method_summary(raw)  # type: ignore[attr-defined]
+        except Exception:
+            return raw
+    return raw
+
 
 def load_method_summary(src_path: pathlib.Path, summary_path: Optional[pathlib.Path]) -> Dict:
     """
@@ -48,15 +54,16 @@ def load_method_summary(src_path: pathlib.Path, summary_path: Optional[pathlib.P
     """
     if summary_path is not None:
         try:
-            return json.loads(summary_path.read_text(encoding="utf-8"))
+            raw = json.loads(summary_path.read_text(encoding="utf-8"))
+            return _normalize_summary(raw)
         except Exception:
             print("[auto_verify_new] Warning: failed to read summary JSON, continuing without it.")
             return {}
 
     if week5_parser is not None:
         try:
-            # Adapt this to your actual Week 5 API if it differs.
-            return week5_parser.run_parser(str(src_path))  # type: ignore
+            raw = week5_parser.run_parser(str(src_path))  
+            return _normalize_summary(raw)
         except Exception as e:
             print(f"[auto_verify_new] Warning: Week 5 parser failed: {e}")
             return {}
@@ -64,29 +71,23 @@ def load_method_summary(src_path: pathlib.Path, summary_path: Optional[pathlib.P
     return {}
 
 
-# ------------------------------------------------------------
-# Invariant loading (Week 7 + Week 9 orchestration)
-# ------------------------------------------------------------
+
+# invariant loading 
+
 
 def load_invariants(src: str, method_summary: Dict, use_boolean: bool = True) -> List[str]:
-    """
-    Priority:
-      1. If summary already has 'synthesized_invariants', use them.
-      2. Else, if use_boolean: call Week 9 Boolean-DNF synthesizer (if present).
-      3. Else/fallback: call Week 6 linear synthesizer.
-    """
-    # 1) Use precomputed, if any.
+    # 1 Use precomputed, if any.
     pre = method_summary.get("synthesized_invariants")
     if isinstance(pre, list) and all(isinstance(s, str) for s in pre):
         return pre
 
-    # 2) Week 9 Boolean DNF (if available and enabled)
+    # 2 Week 9 Boolean DNF 
     if use_boolean and hasattr(linv, "synthesize_boolean_dnf_invariant_for_loop"):
         invs = linv.synthesize_boolean_dnf_invariant_for_loop(src, method_summary)
         if invs:
             return invs
 
-    # 3) Fallback: Week 6 linear invariants
+    # 3 Fallback: Week 6 linear invariants
     if hasattr(linv, "synthesize_linear_invariants_for_loop"):
         invs = linv.synthesize_linear_invariants_for_loop(src, method_summary)
         if invs:
@@ -95,9 +96,8 @@ def load_invariants(src: str, method_summary: Dict, use_boolean: bool = True) ->
     return []
 
 
-# ------------------------------------------------------------
+
 # Insert invariants into Dafny loop
-# ------------------------------------------------------------
 
 WHILE_RE = re.compile(
     r"while\s*\((?P<cond>.*?)\)\s*(?P<brace>\{)",
@@ -105,10 +105,7 @@ WHILE_RE = re.compile(
 )
 
 def find_loop_for_insertion(src: str, method_summary: Dict) -> Optional[re.Match]:
-    """
-    Try to match the loop described by Week 5 summary;
-    otherwise return the first 'while (...) {' occurrence.
-    """
+
     code = src
     loops = method_summary.get("loops", [])
 
@@ -120,7 +117,6 @@ def find_loop_for_insertion(src: str, method_summary: Dict) -> Optional[re.Match
                 if c == cond:
                     return m
 
-    # fallback: first while
     return WHILE_RE.search(code)
 
 
@@ -129,13 +125,6 @@ def insert_invariants_into_loop(
     method_summary: Dict,
     invariants: List[str],
 ) -> str:
-    """
-    Insert lines:
-
-        invariant <inv>
-
-    directly under the chosen while-loop header.
-    """
     if not invariants:
         return src
 
@@ -146,7 +135,7 @@ def insert_invariants_into_loop(
 
     brace_pos = m.start("brace")
 
-    # compute indentation from the while-line
+
     line_start = src.rfind("\n", 0, m.start())
     if line_start == -1:
         line_start = 0
@@ -159,20 +148,17 @@ def insert_invariants_into_loop(
     for inv in invariants:
         inv = inv.strip()
         if inv:
+            if "||" in inv and not (inv.startswith("(") and inv.endswith(")")):
+                inv = f"({inv})"
             inv_block += f"\n{inv_indent}invariant {inv}"
 
-    # Inject invariants just before the '{'
     return src[:brace_pos] + inv_block + src[brace_pos:]
 
 
-# ------------------------------------------------------------
-# Dafny runner
-# ------------------------------------------------------------
+#dafny runner
 
 def run_dafny_verify(dafny_cmd: str, file_path: pathlib.Path) -> int:
-    """
-    Run Dafny on the given file (very simple wrapper).
-    """
+
     cmd = [dafny_cmd, str(file_path)]
     print(f"[auto_verify_new] Running: {' '.join(cmd)}")
     try:
@@ -188,11 +174,7 @@ def run_dafny_verify(dafny_cmd: str, file_path: pathlib.Path) -> int:
         print(f"[auto_verify_new] ERROR: Dafny command not found: {dafny_cmd}")
         return 1
 
-
-# ------------------------------------------------------------
 # CLI
-# ------------------------------------------------------------
-
 def main():
     ap = argparse.ArgumentParser(
         description=(
@@ -233,7 +215,7 @@ def main():
     summary_path = pathlib.Path(args.summary) if args.summary else None
     method_summary = load_method_summary(src_path, summary_path)
 
-    # 1) Synthesize invariants
+    # 1) synthesize invariants
     invariants = load_invariants(src, method_summary, use_boolean=not args.no_bool)
 
     if invariants:
@@ -245,7 +227,7 @@ def main():
         print("[auto_verify_new] No invariants synthesized; leaving file unchanged.")
         new_src = src
 
-    # 2) Output
+    # 2) output
     if args.out:
         out_path = pathlib.Path(args.out)
         out_path.write_text(new_src, encoding="utf-8")
@@ -255,9 +237,8 @@ def main():
         print(new_src)
         target = src_path  # if they also asked to run Dafny, it's on original
 
-    # 3) Optional: run Dafny
+    # 3)run dafny (optional)
     if args.run_dafny:
-        # If we wrote an out file, verify that one (it has invariants).
         if args.out:
             run_dafny_verify(args.dafny, target)
         else:

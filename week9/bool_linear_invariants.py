@@ -11,10 +11,6 @@ from typing import Dict, List, Optional, Tuple
 
 from z3 import And, Int, Not, Or, Solver, sat
 
-# ============================================================
-# Week 5 AST-based parser wiring
-# ============================================================
-
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT / "week5"))
 
@@ -23,26 +19,30 @@ try:
 except ImportError:
     week5_parser = None
 
-
-# ============================================================
-# Loop representation
-# ============================================================
-
 @dataclass
 class LoopSpec:
-    condition: str          # loop condition as text
-    variables: List[str]    # candidate state variables
-    body: str               # loop body text (inside { ... })
-    prefix: str             # code before the loop (for init extraction)
+    condition: str          
+    variables: List[str]    
+    body: str               
+    prefix: str             
 
 
-# Fallback regexes (only used if AST info is missing / partial)
+# regex fallbacks for loop parsing
 WHILE_RE = re.compile(
     r"while\s*"
-    r"(?:\((?P<cond_paren>[^)]*)\)|(?P<cond_noparen>[^{]*))"
+    r"(?:\((?P<cond_paren>[^)]*)\)|(?P<cond_noparen>[^\n{]*))"
     r"\s*(?P<brace>\{)",
-    re.DOTALL,
+    re.MULTILINE,
 )
+
+def _clean_cond_text(raw: str) -> str:
+    if not raw:
+        return ""
+    line = raw.splitlines()[0]
+    if "decreases" in line:
+        line = line.split("decreases", 1)[0]
+    return line.strip()
+
 
 FOR_HEADER_RE = re.compile(
     r"for\s*\(\s*(?P<var>[A-Za-z_][A-Za-z0-9_]*)\s*:=\s*(?P<start>[^;]*);\s*"
@@ -54,10 +54,7 @@ ASSIGN_RE = re.compile(
     r"(?P<lhs>[A-Za-z_][A-Za-z0-9_]*)\s*:=\s*(?P<rhs>[^;]+);"
 )
 
-
-# ============================================================
-# Small helpers
-# ============================================================
+#helper functions
 
 def strip_comments(src: str) -> str:
     lines = []
@@ -91,28 +88,9 @@ def parse_assignments(code: str) -> List[Tuple[str, str]]:
     return assigns
 
 
-# ============================================================
-# Integrate Week 5 summary format(s)
-# ============================================================
+#integrate week 5 parser outputs
 
 def adapt_method_summary(raw: Dict) -> Dict:
-    """
-    Normalize week5/parser.py outputs into a single-method summary:
-
-    {
-      "method_name": str,
-      "loops": [ { "type": "while", "condition": ..., "variables": [...], ... }, ... ],
-      "preconditions": [...],
-      "postconditions": [...],
-      "parameters": [...],
-      "returns": [...]
-    }
-
-    Supports:
-    - New style: already method_name + loops + ...
-    - Old style: {"methods":[...], "loops":[...]}
-    - Minimal loop-centric JSON.
-    """
     if not raw:
         return {}
 
@@ -145,14 +123,12 @@ def extract_loop_by_condition(
     cond: str,
     vars_from_summary: List[str],
 ) -> Optional[LoopSpec]:
-    """
-    Given a loop condition from Week 5 summary, find matching while-loop in src.
-    """
     code = strip_comments(src)
     want = cond.strip()
 
     for m in WHILE_RE.finditer(code):
-        c = (m.group("cond_paren") or m.group("cond_noparen") or "").strip()
+        c_raw = (m.group("cond_paren") or m.group("cond_noparen") or "")
+        c = _clean_cond_text(c_raw)
         if c != want:
             continue
 
@@ -168,21 +144,19 @@ def extract_loop_by_condition(
 
 
 def find_first_loop_fallback(src: str) -> Optional[LoopSpec]:
-    """
-    Fallback if we don't trust / don't have the summary:
-    grab first while / for loop textually.
-    """
     code = strip_comments(src)
 
     m = WHILE_RE.search(code)
     if m:
-        cond = (m.group("cond_paren") or m.group("cond_noparen") or "").strip()
+        c_raw = (m.group("cond_paren") or m.group("cond_noparen") or "")
+        cond = _clean_cond_text(c_raw)
         brace_pos = m.start("brace")
         body_end = find_matching_brace(code, brace_pos)
         body = code[brace_pos + 1: body_end]
         prefix = code[:m.start()]
         vars_list = sorted({lhs for lhs, _ in parse_assignments(body)})
         return LoopSpec(condition=cond, variables=vars_list, body=body, prefix=prefix)
+
 
     m = FOR_HEADER_RE.search(code)
     if m:
@@ -196,10 +170,8 @@ def find_first_loop_fallback(src: str) -> Optional[LoopSpec]:
 
     return None
 
-
-# ============================================================
 # Tiny linear arithmetic parser (supports k*x)
-# ============================================================
+
 
 def parse_term(tok: str, var_map: Dict[str, Int]):
     """
@@ -234,9 +206,7 @@ def parse_term(tok: str, var_map: Dict[str, Int]):
 
 def parse_linear_expr(expr: str, var_map: Dict[str, Int]):
     """
-    Parse a very small linear expression:
-      sum_i ( +/- term_i )
-      where term_i is int, var, or k*var.
+    Parse a very small linear expression
     """
     expr = expr.strip()
     if not expr:
@@ -285,67 +255,75 @@ def parse_guard(cond: str, var_map: Dict[str, Int]):
     """
     Parse guards like:
       e1 <= e2, e1 < e2, e1 >= e2, e1 > e2, e1 == e2
-    into z3.
-    If unsupported, return None (we just won't use that guard).
     """
     if not cond:
         return None
 
     cond = cond.strip()
+    if not cond:
+        return None
 
-    for op in ["<=", ">=", "==", "<", ">"]:
-        parts = cond.split(op)
-        if len(parts) == 2:
-            lhs_s, rhs_s = parts[0].strip(), parts[1].strip()
-            lhs = parse_linear_expr(lhs_s, var_map)
-            rhs = parse_linear_expr(rhs_s, var_map)
-            if lhs is None or rhs is None:
-                return None
-            if op == "<=":
-                return lhs <= rhs
-            if op == "<":
-                return lhs < rhs
-            if op == ">=":
-                return lhs >= rhs
-            if op == ">":
-                return lhs > rhs
-            if op == "==":
-                return lhs == rhs
+    parts = [p.strip() for p in re.split(r"&&|\band\b", cond) if p.strip()]
+    if not parts:
+        parts = [cond]
 
-    return None
+    atoms = []
+    for atom_s in parts:
+        parsed = None
+        for op in ["<=", ">=", "==", "<", ">"]:
+            pieces = atom_s.split(op)
+            if len(pieces) == 2:
+                lhs_s, rhs_s = pieces[0].strip(), pieces[1].strip()
+                lhs = parse_linear_expr(lhs_s, var_map)
+                rhs = parse_linear_expr(rhs_s, var_map)
+                if lhs is None or rhs is None:
+                    parsed = None
+                    break
+                if op == "<=":
+                    parsed = lhs <= rhs
+                elif op == "<":
+                    parsed = lhs < rhs
+                elif op == ">=":
+                    parsed = lhs >= rhs
+                elif op == ">":
+                    parsed = lhs > rhs
+                elif op == "==":
+                    parsed = lhs == rhs
+                break
+        if parsed is not None:
+            atoms.append(parsed)
+
+    if not atoms:
+        return None
+    if len(atoms) == 1:
+        return atoms[0]
+    return And(atoms)
 
 
-# ============================================================
-# Transition relation from assignments
-# ============================================================
+
+# transition relation from assignments
 
 def build_transition_constraints(
     assigns: List[Tuple[str, str]],
     v_before: Dict[str, Int],
     v_after: Dict[str, Int],
 ):
-    """
-    Encode one loop iteration as a sound over-approx:
 
-      for each x:
-        if we see x := rhs1; x := rhs2; ... (e.g. from different branches)
-        encode:
-          x' = rhs1  OR  x' = rhs2 OR ...
-
-      rhs is evaluated in BEFORE-state vars only.
-
-    If we can prove I is inductive for this over-approximation,
-    it's inductive for the real loop (CAV-style sound abstraction).
-    """
     updates: Dict[str, List] = {}
+    assigned_vars = set()
 
     for lhs, rhs in assigns:
         if lhs not in v_before or lhs not in v_after:
             continue
+        assigned_vars.add(lhs)
         rhs_z3 = parse_linear_expr(rhs, v_before)
         if rhs_z3 is None:
             continue
         updates.setdefault(lhs, []).append(rhs_z3)
+
+    for v in v_before:
+        if v not in assigned_vars:
+            updates.setdefault(v, []).append(v_before[v])
 
     if not updates:
         return None
@@ -364,10 +342,6 @@ def extract_initial_values_from_prefix(
     prefix: str,
     vars_list: List[str],
 ) -> Dict[str, int]:
-    """
-    Extract concrete initializations of the form `x := c;` for x in vars_list.
-    Used to enforce Init |= I.
-    """
     init: Dict[str, int] = {}
     for m in ASSIGN_RE.finditer(prefix):
         lhs = m.group("lhs").strip()
@@ -379,12 +353,14 @@ def extract_initial_values_from_prefix(
     return init
 
 
-# ============================================================
-# Template configuration
-# ============================================================
+
+# template configuration
+
 
 COEFF_RANGE = range(-3, 4)
 C_RANGE = range(-10, 11)
+COEFF_RANGE_BOOL = range(-2, 3)
+C_RANGE_BOOL = range(-5, 6)
 
 
 def candidate_linear_templates(
@@ -401,11 +377,6 @@ def candidate_linear_templates(
 
 
 def normalize_constraint(coeffs: Tuple[int, ...], c: int) -> Tuple[Tuple[int, ...], int]:
-    """
-    Normalize sum(a_i x_i) <= c:
-      - divide by gcd
-      - flip so leading non-zero coeff is positive
-    """
     g = 0
     for a in coeffs:
         g = math_gcd(g, abs(a))
@@ -426,10 +397,19 @@ def normalize_constraint(coeffs: Tuple[int, ...], c: int) -> Tuple[Tuple[int, ..
     return coeffs, c
 
 
+def normalize_atom_signed(coeffs: Tuple[int, ...], c: int) -> Tuple[Tuple[int, ...], int]:
+    g = 0
+    for a in coeffs:
+        g = math_gcd(g, abs(a))
+    if c != 0:
+        g = math_gcd(g, abs(c)) if g != 0 else abs(c)
+    if g > 1:
+        coeffs = tuple(a // g for a in coeffs)
+        c //= g
+    return coeffs, c
+
+
 def prune_implied(invariants: Dict[Tuple[int, ...], int]) -> Dict[Tuple[int, ...], int]:
-    """
-    Keep tightest c for each coefficient vector.
-    """
     pruned: Dict[Tuple[int, ...], int] = {}
     for coeffs, c in invariants.items():
         if coeffs in pruned:
@@ -460,9 +440,9 @@ def pretty_print_linear(
     return f"{lhs} <= {c}"
 
 
-# ============================================================
-# Inductiveness checks (CAV-style)
-# ============================================================
+
+# Inductiveness checks 
+
 
 def check_linear_invariant(
     vars_list: List[str],
@@ -517,9 +497,6 @@ def check_linear_invariant(
     return True
 
 
-# ============================================================
-# Week 6: linear invariant synthesis
-# ============================================================
 
 def synthesize_linear_invariants_for_loop(
     src: str,
@@ -593,10 +570,6 @@ def synthesize_linear_invariants_for_loop(
     return invariants
 
 
-# ============================================================
-# Week 9: Boolean DNF invariants
-# ============================================================
-
 @dataclass(frozen=True)
 class BoolAtom:
     coeffs: Tuple[int, ...]
@@ -653,19 +626,15 @@ def collect_candidate_atoms(
     vars_list: List[str],
     guard_expr,
     v_before: Dict[str, Int],
-    coeff_range=COEFF_RANGE,
-    c_range=C_RANGE,
-    max_atoms: int = 20,
+    coeff_range=COEFF_RANGE_BOOL,
+    c_range=C_RANGE_BOOL,
+    max_atoms: int = 12,
 ) -> List[BoolAtom]:
-    """
-    Atoms are linear inequalities from the same template family,
-    filtered to be satisfiable under the loop guard.
-    """
-    atoms: List[BoolAtom] = []
+    pool: List[BoolAtom] = []
     seen = set()
 
     for coeffs, c in candidate_linear_templates(vars_list, coeff_range, c_range):
-        norm_coeffs, norm_c = normalize_constraint(coeffs, c)
+        norm_coeffs, norm_c = normalize_atom_signed(coeffs, c)
         key = (norm_coeffs, norm_c)
         if key in seen:
             continue
@@ -679,12 +648,14 @@ def collect_candidate_atoms(
         if s.check() != sat:
             continue
 
-        atoms.append(atom)
+        pool.append(atom)
         seen.add(key)
-        if len(atoms) >= max_atoms:
-            break
 
-    return atoms
+    def atom_score(a: BoolAtom) -> int:
+        return sum(abs(x) for x in a.coeffs) + abs(a.c)
+
+    pool.sort(key=atom_score)
+    return pool[:max_atoms]
 
 
 def check_dnf_invariant(
@@ -694,13 +665,7 @@ def check_dnf_invariant(
     trans_constraints,
     initial_vals: Dict[str, int],
 ) -> bool:
-    """
-    Check DNF invariant I:
 
-      1. SAT
-      2. Init |= I
-      3. I & guard & T |= I'
-    """
     if not clauses:
         return False
 
@@ -747,18 +712,12 @@ def check_dnf_invariant(
 def synthesize_boolean_dnf_invariant_for_loop(
     src: str,
     method_summary: Dict,
-    max_clauses: int = 3,
+    max_clauses: int = 2,
     max_atoms_per_clause: int = 3,
-    coeff_range=COEFF_RANGE,
-    c_range=C_RANGE,
+    max_clause_candidates: int = 30,
+    coeff_range=COEFF_RANGE_BOOL,
+    c_range=C_RANGE_BOOL,
 ) -> List[str]:
-    """
-    Search for DNF invariants of bounded size:
-
-      OR_{k <= max_clauses} AND_{j <= max_atoms_per_clause} (a_ij · x <= c_ij)
-
-    If none found, fall back to linear invariants.
-    """
     ms = adapt_method_summary(method_summary)
     loops = ms.get("loops", [])
 
@@ -794,7 +753,6 @@ def synthesize_boolean_dnf_invariant_for_loop(
     guard_z3 = parse_guard(cond, v_before)
 
     if trans_cs is None:
-        # No usable transition; reuse linear search as best-effort
         return synthesize_linear_invariants_for_loop(src, ms, coeff_range, c_range)
 
     atoms = collect_candidate_atoms(
@@ -803,7 +761,7 @@ def synthesize_boolean_dnf_invariant_for_loop(
         v_before=v_before,
         coeff_range=coeff_range,
         c_range=c_range,
-        max_atoms=20,
+        max_atoms=12,
     )
 
     if not atoms:
@@ -813,7 +771,10 @@ def synthesize_boolean_dnf_invariant_for_loop(
     clauses_pool: List[List[BoolAtom]] = []
     seen_clause = set()
 
+    per_size_cap = max(2, max_clause_candidates // max_atoms_per_clause) or 2
+
     for r in range(1, max_atoms_per_clause + 1):
+        added_this_size = 0
         for subset in itertools.combinations(atoms, r):
             uniq = []
             seen_atoms = set()
@@ -829,6 +790,16 @@ def synthesize_boolean_dnf_invariant_for_loop(
                 continue
             seen_clause.add(key_clause)
             clauses_pool.append(uniq)
+            added_this_size += 1
+            if added_this_size >= per_size_cap or len(clauses_pool) >= max_clause_candidates:
+                break
+        if len(clauses_pool) >= max_clause_candidates:
+            break
+
+    def clause_score(clause: List[BoolAtom]) -> int:
+        return -len(clause), sum(sum(abs(x) for x in a.coeffs) + abs(a.c) for a in clause)
+
+    clauses_pool.sort(key=clause_score)
 
     # Try small DNFs
     for k in range(1, max_clauses + 1):
@@ -837,13 +808,12 @@ def synthesize_boolean_dnf_invariant_for_loop(
             if check_dnf_invariant(vars_list, clauses, guard_z3, trans_cs, initial_vals):
                 return [format_dnf(clauses, vars_list)]
 
-    # Fallback: linear invariants
     return synthesize_linear_invariants_for_loop(src, ms, coeff_range, c_range)
 
 
-# ============================================================
-# CLI (for auto_verify / manual use)
-# ============================================================
+
+# CLI 
+
 
 def main():
     import argparse
@@ -871,7 +841,7 @@ def main():
     src_path = pathlib.Path(args.file)
     src = src_path.read_text(encoding="utf-8")
 
-    # Load / compute summary
+
     if args.summary:
         raw_summary = json.loads(pathlib.Path(args.summary).read_text(encoding="utf-8"))
     elif week5_parser is not None:

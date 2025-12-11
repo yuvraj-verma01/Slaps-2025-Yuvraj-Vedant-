@@ -1,14 +1,14 @@
-method ToggleBooleanExample() returns (x: int, z: int)
+method ToggleY() returns (y:int)
 {
-    var i := 0;
-    x := 2;
-    z := 0;
+  y := 0;
+  var i := 0;
 
-    while i < 4
-        decreases 4 - i
-    {
-        x := -x;
-        z := 1 - z;
-        i := i + 1;
-    }
+  while i < 4
+    invariant 0 <= i <= 4
+    invariant y == 0 || y == 1
+    decreases 4 - i
+  {
+    y := 1 - y;
+    i := i + 1;
+  }
 }
