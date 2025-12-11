@@ -11,22 +11,21 @@ from z3 import Int, Solver, And, Not, sat
 import sys
 import pathlib
 
-# Assumes layout: <root>/week5/parser.py and <root>/week6/linear_invariants.py
 sys.path.append(str(pathlib.Path(__file__).resolve().parent.parent / "week5"))
-import parser as week5_parser  # type: ignore
+import parser as week5_parser  
 
 
-# ======================= Data structures =======================
+
 
 @dataclass
 class LoopSpec:
     condition: str
     variables: List[str]
-    body: str      # code inside the loop braces
-    prefix: str    # code before the loop (for initial assignments)
+    body: str      
+    prefix: str    
 
 
-# ======================= Dafny helpers =======================
+# dafny helpers 
 
 IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
 
@@ -47,16 +46,12 @@ def strip_comments(src: str) -> str:
     return src
 
 def summarize_methods_from_src(src_path: pathlib.Path) -> Dict:
-    """
-    Thin wrapper over week5.run_parser to stay in sync with the authoritative
-    Week 5 parser (multiple methods, loop metadata, etc.).
-    """
     return week5_parser.run_parser(str(src_path))
 
 
 
 def find_matching_brace(s: str, start: int) -> int:
-    """Return index of matching '}' for '{' at start."""
+    """return index of matching '}' for '{' at start."""
     assert s[start] == "{"
     depth = 0
     for i in range(start, len(s)):
@@ -81,15 +76,13 @@ def parse_assignments(code: str) -> List[Tuple[str, str]]:
 
 def extract_first_loop_with_body(src: str, loop_cond: str) -> Optional[LoopSpec]:
     """
-    Given Dafny source and a loop condition string from Week 5 summary,
+    Given dafny source and a loop condition string from week 5,
     find the corresponding loop and return its body and the prefix before it.
-
-    Pragmatic: choose the first loop whose condition text matches exactly.
     """
     code = strip_comments(src)
     want = loop_cond.strip()
 
-    # While-loops
+    # while loops
     for m in WHILE_RE.finditer(code):
         cond = m.group("cond").strip()
         if cond != want:
@@ -103,10 +96,10 @@ def extract_first_loop_with_body(src: str, loop_cond: str) -> Optional[LoopSpec]
         body_end = find_matching_brace(code, brace_pos)
         body = code[brace_pos + 1: body_end]
         prefix = code[:loop_start]
-        # variables will be filled later from assignments if empty
+
         return LoopSpec(condition=cond, variables=[], body=body, prefix=prefix)
 
-    # For-loops (encoded in Week 5 summary as "i from <start> to <end>")
+    # for loops 
     for m in FOR_RE.finditer(code):
         var = m.group("var").strip()
         start_v = m.group("start").strip()
@@ -130,11 +123,11 @@ def extract_first_loop_with_body(src: str, loop_cond: str) -> Optional[LoopSpec]
 
 def find_first_loop_fallback(src: str) -> Optional[LoopSpec]:
     """
-    Fallback: if Week 5 summary has no loops, syntactically grab the first while/for loop.
+     if Week 5 summary has no loops, syntactically grab the first while/for loop.
     """
     code = strip_comments(src)
 
-    # While-loop first
+    # while-loop 
     m = WHILE_RE.search(code)
     if m:
         cond = m.group("cond").strip()
@@ -144,11 +137,10 @@ def find_first_loop_fallback(src: str) -> Optional[LoopSpec]:
             body_end = find_matching_brace(code, brace_pos)
             body = code[brace_pos + 1: body_end]
             prefix = code[:loop_start]
-            # Variables: all assigned vars in body
             vars_in_body = sorted({lhs for (lhs, _) in parse_assignments(body)})
             return LoopSpec(condition=cond, variables=vars_in_body, body=body, prefix=prefix)
 
-    # For-loop
+    # for loop
     m = FOR_RE.search(code)
     if m:
         var = m.group("var").strip()
@@ -176,15 +168,12 @@ def parse_for_condition(cond_text: str) -> Optional[Tuple[str, str, str]]:
         return None
     return m.group("var"), m.group("start"), m.group("end")
 
-# ======================= Z3 helpers ============================
+# Z3 helpers
 
 def parse_linear_expr(expr: str, var_map: Dict[str, Int]):
     """
-    Parse a tiny fragment of linear integer expressions into a Z3 expr:
-      - integers
-      - variables
-      - '+' and '-' between them.
-    Returns None if unsupported.
+    parse a tiny fragment of linear integer expressions into a Z3 expr with integers, variables, '+' and '-' between them.
+    return None if unsupported.
     """
     expr = expr.strip()
     if not expr:
@@ -254,9 +243,9 @@ def build_transition_constraints(
     vars_after: Dict[str, Int],
 ):
     """
-    For each assignment 'x := rhs', build vars_after[x] = rhs(vars_before) if rhs is linear.
-    For variables never assigned in the loop, enforce vars_after[x] = vars_before[x].
-    For variables assigned with non-linear/unsupported rhs, leave vars_after[x] unconstrained.
+    for each assignment 'x := rhs', build vars_after[x] = rhs(vars_before) if rhs is linear.
+    for variables never assigned in the loop, enforce vars_after[x] = vars_before[x].
+    for variables assigned with non-linear/unsupported rhs, leave vars_after[x] unconstrained.
     """
     constraints = []
     assigned = set()
@@ -282,10 +271,7 @@ def build_transition_constraints(
 
 def parse_guard(cond: str, vars_before: Dict[str, Int]):
     """
-    Parse a very small fragment of guard:
-      - conjunction with &&
-      - atoms: a <= b, a < b, a >= b, a > b, a == b
-      - a must be a loop var; b is loop var or int
+    Parse a very small fragment of guard: conjunction with &&, atoms like a <= b, a < b, a >= b, a > b, a == b, a must be a loop var; b is loop var or int
     """
     cond = cond.strip()
     if not cond:
@@ -338,16 +324,14 @@ def parse_guard(cond: str, vars_before: Dict[str, Int]):
     return And(*zparts)
 
 
-# =================== Invariant Synthesis =======================
-
+# invariant synthesis 
 def candidate_linear_templates(
     variables: List[str],
     coeff_range=range(-2, 3),
     c_range=range(-5, 6),
 ):
     """
-    Generate templates of form sum(ai * xi) <= c with small integer coeffs.
-    Skip all-zero vector.
+    generate templates of form sum(ai * xi) <= c with small integer coeffs.
     """
     for coeffs in itertools.product(coeff_range, repeat=len(variables)):
         if all(a == 0 for a in coeffs):
@@ -360,10 +344,6 @@ def extract_initial_values_from_prefix(
     prefix: str,
     loop_vars: List[str],
 ) -> Dict[str, int]:
-    """
-    From the code before the loop, read the LAST simple assignment x := k
-    for each loop variable x with integer k. Approximates loop entry state.
-    """
     assigns = parse_assignments(prefix)
     init: Dict[str, int] = {}
 
@@ -392,15 +372,14 @@ def check_template_is_invariant(
 ) -> bool:
     """
     Check template sum(ai * xi) <= c is a valid loop invariant:
-
-      1. Initialization: holds at approximated loop entry (if known).
+      1. Initialization: holds at approximated loop entry.
       2. Preservation: (I ∧ guard ∧ T) ⇒ I'.
-      3. Non-triviality: I is satisfiable.
+      3. Termination: I is satisfiable.
     """
     inv_before = sum(coeffs[i] * v_before[v] for i, v in enumerate(vars_list)) <= c
     inv_after = sum(coeffs[i] * v_after[v] for i, v in enumerate(vars_list)) <= c
 
-    # (1) Initialization
+    # 1 initialization
     if initial_vals:
         s_init = Solver()
         for v, val in initial_vals.items():
@@ -410,13 +389,13 @@ def check_template_is_invariant(
         if s_init.check() == sat:
             return False
 
-    # (3) Non-triviality
+    # 3 termination
     s_sat = Solver()
     s_sat.add(inv_before)
     if s_sat.check() != sat:
         return False
 
-    # (2) Preservation
+    # 2 preservation
     s_pres = Solver()
     s_pres.add(trans_constraints)
     if guard_expr is not None:
@@ -431,7 +410,7 @@ def check_template_is_invariant(
 
 def normalize_coeffs(coeffs: Tuple[int, ...], c: int) -> Tuple[Tuple[int, ...], int]:
     """
-    Normalize (coeffs, c) by dividing by gcd of all coeffs and c (if > 1).
+    Normalize (coeffs, c) by dividing by gcd of all coeffs and c.
     """
     g = 0
     for a in coeffs:
@@ -451,10 +430,6 @@ def invariant_implies(
     coeffs_weak: Tuple[int, ...],
     c_weak: int,
 ) -> bool:
-    """
-    Check if (coeffs_strong · x <= c_strong) ⇒ (coeffs_weak · x <= c_weak)
-    assuming coeffs_weak is a positive scalar multiple of coeffs_strong.
-    """
     assert len(coeffs_strong) == len(coeffs_weak)
     n = len(coeffs_strong)
 
@@ -471,11 +446,9 @@ def invariant_implies(
     if a1 == 0 or a2 == 0:
         return False
 
-    # Same direction (positive scalar)
     if a1 * a2 <= 0:
         return False
 
-    # All coordinates consistent with same λ
     for k in range(n):
         b1 = coeffs_strong[k]
         b2 = coeffs_weak[k]
@@ -486,7 +459,6 @@ def invariant_implies(
         if b2 * a1 != b1 * a2:
             return False
 
-    # Need c_weak >= λ * c_strong
     ln = abs(a2)
     ld = abs(a1)
     return c_weak * ld >= c_strong * ln
@@ -494,8 +466,7 @@ def invariant_implies(
 
 def prune_implied(invariant_map: Dict[Tuple[int, ...], int]) -> Dict[Tuple[int, ...], int]:
     """
-    Drop invariants that are logically implied by another one
-    (same direction up to positive scaling).
+    drop invariants that are logically implied by another one
     """
     items = list(invariant_map.items())
     n = len(items)
@@ -531,9 +502,9 @@ def synthesize_linear_invariants_for_loop(
 ) -> List[str]:
     """
     Main Week 6 routine:
-      - Prefer Week 5 summary to locate the loop.
-      - Fallback to simple syntactic detection if summary has no loops.
-      - Build linear transition system and synthesize inductive invariants.
+      - week 5 summary to locate the loop.
+      - fallback to simple syntactic detection if summary has no loops.
+      - build linear transition system and synthesize inductive invariants.
     """
     loops = method_summary.get("loops", [])
 
@@ -543,7 +514,7 @@ def synthesize_linear_invariants_for_loop(
     vars_list: List[str] = []
 
     if loop_info is None and loops:
-        # Use first loop from Week 5 summary
+        # Use first loop from week 5 summary
         loop_info = loops[0]
         if loop_info:
             cond = (loop_info.get("condition") or "").strip()
@@ -551,13 +522,13 @@ def synthesize_linear_invariants_for_loop(
         if cond:
             loop_spec = extract_first_loop_with_body(src, cond)
     if loop_spec is None:
-        # Fallback: detect first loop syntactically
+        # fallback: detect first loop syntactically
         loop_spec = find_first_loop_fallback(src)
 
     if loop_spec is None:
         return []
 
-    # If vars_list empty or missing, infer from LoopSpec / assignments
+    # if vars_list empty or missing, infer from LoopSpec / assignments
     if not vars_list:
         body_assigns = parse_assignments(loop_spec.body)
         vars_list = sorted({lhs for (lhs, _) in body_assigns})
@@ -568,7 +539,7 @@ def synthesize_linear_invariants_for_loop(
     cond = loop_spec.condition
     guard_cond = cond
 
-    # Derive guard/initial value hints for for-loops using structured condition text
+    # derive guard/initial value hints for for-loops using structured condition text
     if loop_info and loop_info.get("type") == "for":
         parsed = parse_for_condition(loop_info.get("condition", ""))
         if parsed:
@@ -577,7 +548,7 @@ def synthesize_linear_invariants_for_loop(
             if f_var not in vars_list:
                 vars_list = vars_list + [f_var]
 
-    # Step 2: build constraints
+    # step 2: build constraints
     assigns = parse_assignments(loop_spec.body)
     initial_vals = extract_initial_values_from_prefix(loop_spec.prefix, vars_list)
     if loop_info and loop_info.get("type") == "for":
@@ -601,7 +572,7 @@ def synthesize_linear_invariants_for_loop(
     guard_z3 = parse_guard(guard_cond, v_before)
     preconds = method_summary.get("preconditions", [])
 
-    # Step 3: enumerate templates and check invariants
+    # step 3: enumerate templates and check invariants
     invariant_map: Dict[Tuple[int, ...], int] = {}
 
     for coeffs, c in candidate_linear_templates(vars_list, coeff_range, c_range):
@@ -623,7 +594,7 @@ def synthesize_linear_invariants_for_loop(
             else:
                 invariant_map[norm_coeffs] = norm_c
 
-    # Step 4: prune implied invariants & pretty-print
+    # step 4: prune implied invariants & pretty-print
     invariant_map = prune_implied(invariant_map)
 
     invariants: List[str] = []
@@ -656,8 +627,7 @@ def synthesize_linear_invariants_for_method(
 ) -> List[Dict]:
     """
     Synthesize invariants for every loop in a method summary.
-    Returns a list of {"loop": loop_info, "synthesized_invariants": [...]}. If a
-    method has no loops we return an empty list.
+    if a method has no loops we return an empty list.
     """
     results: List[Dict] = []
     for loop in method_summary.get("loops", []):
@@ -673,13 +643,13 @@ def synthesize_linear_invariants_for_method(
     return results
 
 
-# ========================== CLI ===============================
+# CLI 
 
 def main():
     import argparse
 
     ap = argparse.ArgumentParser(
-        description="Week 6: Linear Invariant Synthesis Tool (template-based, Z3)"
+        description=" Linear Invariant Synthesis Tool "
     )
     ap.add_argument("source", help="Path to a .dfy file")
     ap.add_argument(

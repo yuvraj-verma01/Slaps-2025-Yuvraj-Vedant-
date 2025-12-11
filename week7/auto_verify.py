@@ -8,29 +8,26 @@ import sys
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 
-# Assumes layout:
-#   <root>/week5/parser.py
-#   <root>/week6/linear_invariants.py
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT / "week5"))
 sys.path.append(str(ROOT / "week6"))
 
-import parser as week5_parser  # type: ignore
-import linear_invariants as week6_lin  # type: ignore
+import parser as week5_parser  
+import linear_invariants as week6_lin  
 
 
-# ======================= Data structures =======================
+# data structures
 
 @dataclass
 class LoopMatch:
     kind: str              # "while" or "for"
     cond_text: str         # condition or for-range summary
     start_idx: int         # index of 'while' or 'for'
-    header_end_idx: int    # end of the loop header (right after condition / for-range)
-    indent: str            # indentation of the loop header line
+    header_end_idx: int    # end of the loop header 
+    indent: str            
 
 
-# ======================= Parsing helpers =======================
+# parsing helpers 
 
 IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
 
@@ -48,12 +45,6 @@ def strip_comments(src: str) -> str:
 
 
 def find_loop_match_by_condition(src: str, cond: str) -> Optional[LoopMatch]:
-    """
-    Find first loop whose condition matches cond from Week 5 summary.
-    Supports:
-      while (cond)
-      for i := start to end   encoded as "i in [start, end]".
-    """
     code = src
 
     # while-loops
@@ -86,10 +77,6 @@ def find_loop_match_by_condition(src: str, cond: str) -> Optional[LoopMatch]:
 
 
 def find_first_loop_fallback(src: str) -> Optional[LoopMatch]:
-    """
-    Fallback: syntactically grab the first while/for loop if Week 5 summary
-    can't be used (or has no loops).
-    """
     code = src
 
     m = WHILE_RE.search(code)
@@ -120,16 +107,10 @@ def find_first_loop_fallback(src: str) -> Optional[LoopMatch]:
     return None
 
 
-# ======================= Invariant loading =======================
+# invariant loading
 
 def load_invariants(inv_json_path: Optional[str], src: str, method_summary: Dict) -> List[str]:
-    """
-    Load invariants from JSON if provided, otherwise synthesize using Week 6.
-    Accepts shapes:
-      { "synthesized_invariants": [...] }
-      { "invariants": [...] }
-      { "loop": { "synthesized_invariants": [...] } }
-    """
+    # load invariants from JSON if provided, otherwise synthesize using Week 6.
     if inv_json_path:
         data = json.loads(pathlib.Path(inv_json_path).read_text(encoding="utf-8"))
 
@@ -152,23 +133,7 @@ def load_invariants(inv_json_path: Optional[str], src: str, method_summary: Dict
 # ======================= Invariant insertion =======================
 
 def insert_invariants_into_loop(src: str, loop: LoopMatch, invariants: List[str]) -> str:
-    """
-    Insert invariant clauses right after the loop header, before the '{'.
-
-    while (i <= n)
-    {
-      ...
-    }
-
-    becomes:
-
-    while (i <= n)
-      invariant ...
-      invariant ...
-    {
-      ...
-    }
-    """
+     # insert invariant clauses right after the loop header, before the '{'.
     if not invariants:
         return src
 
@@ -181,17 +146,16 @@ def insert_invariants_into_loop(src: str, loop: LoopMatch, invariants: List[str]
     return src[:insert_pos] + inv_lines + src[insert_pos:]
 
 
-# ======================= Dafny runner =======================
+# dafny runner
 
 def run_dafny_verify(dafny_path: str, dfy_path: pathlib.Path) -> Dict[str, str]:
     """
-    Run Dafny verifier on the given .dfy file.
-    Returns:
+    run Dafny verifier on the given .dfy file.
+    returns:
       {
         "ok": "true"/"false",
         "raw_output": "<full stdout+stderr>"
       }
-    Uses a relaxed success check to support both old and new CLI output.
     """
     try:
         completed = subprocess.run(
@@ -208,10 +172,6 @@ def run_dafny_verify(dafny_path: str, dfy_path: pathlib.Path) -> Dict[str, str]:
 
     output = (completed.stdout or "") + (completed.stderr or "")
 
-    # Consider it a success if Dafny says it finished and reports 0 errors.
-    # This matches both:
-    # - "Dafny program verifier finished with X verified, 0 errors"
-    # - future similar formats that still contain "0 errors".
     ok = ("Dafny program verifier finished" in output and "0 errors" in output)
 
     return {
@@ -239,7 +199,9 @@ def build_and_verify(
       6. Return a JSON-able summary.
     """
     src = src_path.read_text(encoding="utf-8")
-    method_summary = week5_parser.parse_dafny(src)
+    parsed = week5_parser.run_parser(str(src_path))
+    methods = parsed.get("methods", []) if isinstance(parsed, dict) else []
+    method_summary = methods[0] if methods else {}
 
     # Step 1+2: get invariants
     invariants = load_invariants(inv_json_path, src, method_summary)
