@@ -6,9 +6,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 
-# ============================================================
-# Tokenizer
-# ============================================================
+# tokenization
 
 @dataclass
 class Token:
@@ -19,9 +17,9 @@ class Token:
 
 
 KEYWORDS = {
-    "method", "returns", "requires", "ensures",
+    "method", "returns", "requires", "ensures", "modifies", "reads", "decreases",
     "invariant", "while", "for", "to",
-    "var", "assert", "if", "else"
+    "var", "assert", "if", "else",
 }
 
 TOKEN_SPEC = [
@@ -63,9 +61,9 @@ def tokenize(src: str) -> List[Token]:
     return tokens
 
 
-# ============================================================
-# AST Nodes
-# ============================================================
+
+# AST creation
+
 
 @dataclass
 class Stmt:
@@ -148,9 +146,8 @@ class Program:
     methods: List[MethodDecl] = field(default_factory=list)
 
 
-# ============================================================
-# Parser helpers
-# ============================================================
+# parser helpers
+
 
 class ParserError(Exception):
     pass
@@ -193,7 +190,7 @@ class Parser:
             return t
         return None
 
-    # ---------------- program / methods ----------------
+    # program/ methods 
 
     def parse_program(self) -> Program:
         methods: List[MethodDecl] = []
@@ -225,14 +222,15 @@ class Parser:
         # requires/ensures
         requires: List[str] = []
         ensures: List[str] = []
+        spec_keywords = {"requires", "ensures", "modifies", "reads", "decreases"}
         while True:
             t = self.peek()
-            if t and t.kind == "KEYWORD" and t.value in ("requires", "ensures"):
+            if t and t.kind == "KEYWORD" and t.value in spec_keywords:
                 kw_tok = self.advance()
                 expr = self.collect_spec_expr()
                 if kw_tok.value == "requires":
                     requires.append(expr)
-                else:
+                elif kw_tok.value == "ensures":
                     ensures.append(expr)
             else:
                 break
@@ -258,12 +256,22 @@ class Parser:
             return params
 
         while True:
-            # name : type
             name_tok = self.expect("IDENT")
             self.expect("COLON")
-            # type is usually IDENT (like int), accept a simple IDENT
-            type_tok = self.expect("IDENT")
-            params.append((name_tok.value, type_tok.value))
+            type_start_tok = self.peek()
+            if not type_start_tok:
+                raise ParserError("Unexpected EOF while parsing parameter type")
+            type_start = type_start_tok.start
+            type_end = type_start_tok.end
+            while self.peek() is not None:
+                t = self.peek()
+                if t.kind in ("COMMA", "RPAREN"):
+                    break
+                type_end = t.end
+                self.advance()
+
+            type_text = self.src[type_start:type_end].strip()
+            params.append((name_tok.value, type_text))
 
             if self.match("COMMA"):
                 continue
@@ -286,7 +294,7 @@ class Parser:
                 end_pos = t.start
                 break
             if t.kind == "KEYWORD" and t.value in {
-                "requires", "ensures", "invariant",
+                "requires", "ensures", "invariant", "modifies", "reads", "decreases",
                 "method", "while", "for", "if", "else", "var", "assert"
             }:
                 end_pos = t.start
@@ -300,7 +308,7 @@ class Parser:
         self.i = j
         return self.src[start_pos:end_pos].strip()
 
-    # ---------------- blocks / statements ----------------
+    # blocks / statements 
 
     def parse_block_contents(self) -> Tuple[List[Stmt], Token]:
         stmts: List[Stmt] = []
@@ -350,7 +358,7 @@ class Parser:
             return t1.kind == "IDENT" and t2.kind == "OP" and t2.value == ":="
         return False
 
-    # ------------- specific statements -------------
+    # specific statements
 
     def parse_rawstmt(self) -> RawStmt:
         start_tok = self.peek()
@@ -402,12 +410,10 @@ class Parser:
         start = kw.start
         rhs: Optional[str] = None
 
-        # Optional ':' type
         if self.match("COLON"):
             if self.peek() and self.peek().kind == "IDENT":
                 self.advance()
 
-        # Optional ':=' expr
         if self.match("OP", ":="):
             rhs_start_tok = self.peek()
             if rhs_start_tok:
@@ -499,7 +505,7 @@ class Parser:
         cond_start = cond_start_tok.start
         cond_end = cond_start
 
-        # If next is LPAREN, parse (...) as condition
+        # if next is LPAREN the parse (...) as condition
         if cond_start_tok.kind == "LPAREN":
             depth = 0
             first = True
@@ -517,7 +523,7 @@ class Parser:
                         break
             condition = self.src[cond_start:cond_end].strip()
         else:
-            # Until 'invariant' or '{'
+            # until 'invariant' or '{'
             while self.peek() is not None:
                 t = self.peek()
                 if t.kind == "KEYWORD" and t.value == "invariant":
@@ -528,15 +534,15 @@ class Parser:
                 self.advance()
             condition = self.src[cond_start:cond_end].strip()
 
-        # Invariants
+        # invariants
         invariants: List[str] = []
         while True:
             t = self.peek()
-            if t and t.kind == "KEYWORD" and t.value == "invariant":
-                self.advance()
-                inv = self.collect_spec_expr()
-                if inv:
-                    invariants.append(inv)
+            if t and t.kind == "KEYWORD" and t.value in {"invariant", "decreases"}:
+                kw_tok = self.advance()
+                expr = self.collect_spec_expr()
+                if kw_tok.value == "invariant" and expr:
+                    invariants.append(expr)
             else:
                 break
 
@@ -572,8 +578,6 @@ class Parser:
             start_expr_end = t.end
             self.advance()
         start_expr = self.src[start_expr_start:start_expr_end].strip()
-
-        # end expr until 'invariant' or '{'
         end_expr_start_tok = self.peek()
         if not end_expr_start_tok:
             raise ParserError("EOF in for")
@@ -592,10 +596,10 @@ class Parser:
         invariants: List[str] = []
         while True:
             t = self.peek()
-            if t and t.kind == "KEYWORD" and t.value == "invariant":
-                self.advance()
+            if t and t.kind == "KEYWORD" and t.value in {"invariant", "decreases"}:
+                kw_tok = self.advance()
                 inv = self.collect_spec_expr()
-                if inv:
+                if kw_tok.value == "invariant" and inv:
                     invariants.append(inv)
             else:
                 break
@@ -614,9 +618,8 @@ class Parser:
         )
 
 
-# ============================================================
-# Extraction helpers
-# ============================================================
+# extraction helpers
+
 
 IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
@@ -662,8 +665,6 @@ def collect_loops(method: MethodDecl) -> List[dict]:
     def loop_from_while(w: WhileLoop) -> dict:
         assigned = collect_assigned_vars(w.body)
         cond_vars = set(extract_identifiers(w.condition))
-        # keep only vars that are actually "loop variables"
-        # = assigned in body, plus those in condition that are also assigned
         loop_vars = set(assigned)
         loop_vars |= (cond_vars & assigned)
         return {
@@ -688,13 +689,8 @@ def collect_loops(method: MethodDecl) -> List[dict]:
     return loops
 
 
-# ============================================================
-# Public API: run_parser(path) -> summary dict
-# ============================================================
-
 def run_parser(path: str):
     """
-    For this project we output a single-method summary in the form:
 
     {
       "method_name": "...",
@@ -704,6 +700,7 @@ def run_parser(path: str):
       "parameters": [ {name, type}, ... ],
       "returns": [ {name, type}, ... ]
     }
+    Gets method summaries from a Dafny source file.
     """
     with open(path, "r", encoding="utf-8") as f:
         src = f.read()
@@ -712,44 +709,35 @@ def run_parser(path: str):
     p = Parser(src, tokens)
     prog = p.parse_program()
 
-    if not prog.methods:
-        return {
-            "method_name": None,
-            "loops": [],
-            "preconditions": [],
-            "postconditions": [],
-            "parameters": [],
-            "returns": [],
-        }
+    summaries = []
+    for m in prog.methods:
+        loops = collect_loops(m)
+        pre = list(m.requires)
+        post = list(m.ensures)
+        params = [{"name": n, "type": t} for (n, t) in m.params]
+        rets = [{"name": n, "type": t} for (n, t) in m.rets]
 
-    # For now, follow your spec: assume one main method, take the first.
-    m = prog.methods[0]
+        summaries.append(
+            {
+                "method_name": m.name,
+                "loops": loops,
+                "preconditions": pre,
+                "postconditions": post,
+                "parameters": params,
+                "returns": rets,
+            }
+        )
 
-    loops = collect_loops(m)
-
-    pre = list(m.requires)
-    post = list(m.ensures)
-
-    params = [{"name": n, "type": t} for (n, t) in m.params]
-    rets = [{"name": n, "type": t} for (n, t) in m.rets]
-
-    return {
-        "method_name": m.name,
-        "loops": loops,
-        "preconditions": pre,
-        "postconditions": post,
-        "parameters": params,
-        "returns": rets,
-    }
+    return {"methods": summaries}
 
 
-# ============================================================
-# CLI (for debugging)
-# ============================================================
+
+# CLI
+
 
 if __name__ == "__main__":
     import argparse
-    ap = argparse.ArgumentParser(description="Dafny AST-based parser (SLAPS format)")
+    ap = argparse.ArgumentParser(description="Dafny AST-based parser")
     ap.add_argument("file", help="Dafny file to parse")
     args = ap.parse_args()
 

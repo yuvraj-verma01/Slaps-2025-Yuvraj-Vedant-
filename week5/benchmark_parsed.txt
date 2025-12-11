@@ -1,0 +1,536 @@
+================================================================================
+Benchmark: week3\problem1.dfy
+  #methods: 1
+    - ArraySum: 1 params, 1 loops, 0 requires, 1 ensures
+
+  Full summary JSON:
+{
+  "methods": [
+    {
+      "method_name": "ArraySum",
+      "loops": [
+        {
+          "type": "while",
+          "condition": "i < a.Length",
+          "variables": [
+            "i",
+            "prefix",
+            "sum"
+          ],
+          "invariants": [
+            "0 <= i <= a.Length",
+            "prefix == a[..i]",
+            "sum == Sum(prefix)"
+          ]
+        }
+      ],
+      "preconditions": [],
+      "postconditions": [
+        "sum == Sum(a[..])"
+      ],
+      "parameters": [
+        {
+          "name": "a",
+          "type": "array<int>"
+        }
+      ],
+      "returns": [
+        {
+          "name": "sum",
+          "type": "int"
+        }
+      ]
+    }
+  ]
+}
+
+================================================================================
+Benchmark: week3\problem2.dfy
+  #methods: 1
+    - GCD: 2 params, 1 loops, 1 requires, 3 ensures
+
+  Full summary JSON:
+{
+  "methods": [
+    {
+      "method_name": "GCD",
+      "loops": [
+        {
+          "type": "while",
+          "condition": "y != 0",
+          "variables": [
+            "temp",
+            "x",
+            "y"
+          ],
+          "invariants": [
+            "x > 0",
+            "y >= 0",
+            "gcd_recurse(x, y) == G"
+          ]
+        }
+      ],
+      "preconditions": [
+        "a > 0 && b > 0"
+      ],
+      "postconditions": [
+        "gcd > 0",
+        "a % gcd == 0 && b % gcd == 0",
+        "forall d :: d > 0 && a % d == 0 && b % d == 0 ==> d <= gcd"
+      ],
+      "parameters": [
+        {
+          "name": "a",
+          "type": "int"
+        },
+        {
+          "name": "b",
+          "type": "int"
+        }
+      ],
+      "returns": [
+        {
+          "name": "gcd",
+          "type": "int"
+        }
+      ]
+    }
+  ]
+}
+
+================================================================================
+Benchmark: week3\problem3.dfy
+  #methods: 1
+    - TwoSum: 2 params, 2 loops, 1 requires, 2 ensures
+
+  Full summary JSON:
+{
+  "methods": [
+    {
+      "method_name": "TwoSum",
+      "loops": [
+        {
+          "type": "while",
+          "condition": "a < n",
+          "variables": [
+            "a",
+            "b",
+            "i",
+            "j"
+          ],
+          "invariants": [
+            "0 <= a <= n"
+          ]
+        },
+        {
+          "type": "while",
+          "condition": "b < n",
+          "variables": [
+            "b",
+            "i",
+            "j"
+          ],
+          "invariants": [
+            "a + 1 <= b <= n"
+          ]
+        }
+      ],
+      "preconditions": [
+        "nums.Length >= 2"
+      ],
+      "postconditions": [
+        "0 <= i < nums.Length",
+        "0 <= j < nums.Length"
+      ],
+      "parameters": [
+        {
+          "name": "nums",
+          "type": "array<int>"
+        },
+        {
+          "name": "target",
+          "type": "int"
+        }
+      ],
+      "returns": [
+        {
+          "name": "i",
+          "type": "int"
+        },
+        {
+          "name": "j",
+          "type": "int"
+        }
+      ]
+    }
+  ]
+}
+
+================================================================================
+Benchmark: week3\problem4.dfy
+  #methods: 1
+    - PermutationCount: 2 params, 1 loops, 1 requires, 1 ensures
+
+  Full summary JSON:
+{
+  "methods": [
+    {
+      "method_name": "PermutationCount",
+      "loops": [
+        {
+          "type": "while",
+          "condition": "i < r",
+          "variables": [
+            "i",
+            "p"
+          ],
+          "invariants": [
+            "0 <= i <= r",
+            "p == Perm(n, i)"
+          ]
+        }
+      ],
+      "preconditions": [
+        "r <= a.Length"
+      ],
+      "postconditions": [
+        "p == Perm(a.Length, r)"
+      ],
+      "parameters": [
+        {
+          "name": "a",
+          "type": "array<int>"
+        },
+        {
+          "name": "r",
+          "type": "nat"
+        }
+      ],
+      "returns": [
+        {
+          "name": "p",
+          "type": "nat"
+        }
+      ]
+    }
+  ]
+}
+
+================================================================================
+Benchmark: week3\problem5.dfy
+  #methods: 1
+    - CombinationCount: 2 params, 1 loops, 1 requires, 1 ensures
+
+  Full summary JSON:
+{
+  "methods": [
+    {
+      "method_name": "CombinationCount",
+      "loops": [
+        {
+          "type": "while",
+          "condition": "i < r",
+          "variables": [
+            "c",
+            "i"
+          ],
+          "invariants": [
+            "0 <= i <= r",
+            "r <= n",
+            "c == Choose(n, i)"
+          ]
+        }
+      ],
+      "preconditions": [
+        "r <= a.Length"
+      ],
+      "postconditions": [
+        "c == Choose(a.Length, r)"
+      ],
+      "parameters": [
+        {
+          "name": "a",
+          "type": "array<int>"
+        },
+        {
+          "name": "r",
+          "type": "nat"
+        }
+      ],
+      "returns": [
+        {
+          "name": "c",
+          "type": "nat"
+        }
+      ]
+    }
+  ]
+}
+
+================================================================================
+Benchmark: week3\problem6.dfy
+  #methods: 2
+    - ExtGCD: 2 params, 0 loops, 1 requires, 2 ensures
+    - ChineseRemainder: 2 params, 2 loops, 4 requires, 0 ensures
+
+  Full summary JSON:
+{
+  "methods": [
+    {
+      "method_name": "ExtGCD",
+      "loops": [],
+      "preconditions": [
+        "a >= 0 && b >= 0 && a + b > 0"
+      ],
+      "postconditions": [
+        "g == gcd_recurse(a, b)",
+        "a * x + b * y == g"
+      ],
+      "parameters": [
+        {
+          "name": "a",
+          "type": "int"
+        },
+        {
+          "name": "b",
+          "type": "int"
+        }
+      ],
+      "returns": [
+        {
+          "name": "g",
+          "type": "int"
+        },
+        {
+          "name": "x",
+          "type": "int"
+        },
+        {
+          "name": "y",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "method_name": "ChineseRemainder",
+      "loops": [
+        {
+          "type": "while",
+          "condition": "i < r",
+          "variables": [
+            "M",
+            "i"
+          ],
+          "invariants": [
+            "0 <= i <= r",
+            "M > 0"
+          ]
+        },
+        {
+          "type": "while",
+          "condition": "i < r",
+          "variables": [
+            "Mi",
+            "ci",
+            "i",
+            "mi",
+            "sum",
+            "vi"
+          ],
+          "invariants": [
+            "0 <= i <= r"
+          ]
+        }
+      ],
+      "preconditions": [
+        "mods.Length == vals.Length",
+        "mods.Length > 0",
+        "forall i :: 0 <= i < mods.Length ==> mods[i] > 0",
+        "forall i, j :: 0 <= i < j < mods.Length ==> gcd_recurse(mods[i], mods[j]) == 1"
+      ],
+      "postconditions": [],
+      "parameters": [
+        {
+          "name": "mods",
+          "type": "array<int>"
+        },
+        {
+          "name": "vals",
+          "type": "array<int>"
+        }
+      ],
+      "returns": [
+        {
+          "name": "f",
+          "type": "int"
+        }
+      ]
+    }
+  ]
+}
+
+================================================================================
+Benchmark: week3\problem7.dfy
+  #methods: 4
+    - Swap: 3 params, 0 loops, 1 requires, 0 ensures
+    - Partition: 3 params, 1 loops, 1 requires, 1 ensures
+    - QuickSortRange: 3 params, 0 loops, 1 requires, 0 ensures
+    - QuickSort: 1 params, 0 loops, 0 requires, 0 ensures
+
+  Full summary JSON:
+{
+  "methods": [
+    {
+      "method_name": "Swap",
+      "loops": [],
+      "preconditions": [
+        "0 <= i < a.Length && 0 <= j < a.Length"
+      ],
+      "postconditions": [],
+      "parameters": [
+        {
+          "name": "a",
+          "type": "array<int>"
+        },
+        {
+          "name": "i",
+          "type": "int"
+        },
+        {
+          "name": "j",
+          "type": "int"
+        }
+      ],
+      "returns": []
+    },
+    {
+      "method_name": "Partition",
+      "loops": [
+        {
+          "type": "while",
+          "condition": "j < high",
+          "variables": [
+            "i",
+            "j"
+          ],
+          "invariants": [
+            "low <= i <= j <= high"
+          ]
+        }
+      ],
+      "preconditions": [
+        "0 <= low <= high < a.Length"
+      ],
+      "postconditions": [
+        "low <= p <= high"
+      ],
+      "parameters": [
+        {
+          "name": "a",
+          "type": "array<int>"
+        },
+        {
+          "name": "low",
+          "type": "int"
+        },
+        {
+          "name": "high",
+          "type": "int"
+        }
+      ],
+      "returns": [
+        {
+          "name": "p",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "method_name": "QuickSortRange",
+      "loops": [],
+      "preconditions": [
+        "0 <= low <= high < a.Length"
+      ],
+      "postconditions": [],
+      "parameters": [
+        {
+          "name": "a",
+          "type": "array<int>"
+        },
+        {
+          "name": "low",
+          "type": "int"
+        },
+        {
+          "name": "high",
+          "type": "int"
+        }
+      ],
+      "returns": []
+    },
+    {
+      "method_name": "QuickSort",
+      "loops": [],
+      "preconditions": [],
+      "postconditions": [],
+      "parameters": [
+        {
+          "name": "a",
+          "type": "array<int>"
+        }
+      ],
+      "returns": []
+    }
+  ]
+}
+
+================================================================================
+Benchmark: week3\problem8.dfy
+  #methods: 1
+    - FibIter: 1 params, 1 loops, 0 requires, 3 ensures
+
+  Full summary JSON:
+{
+  "methods": [
+    {
+      "method_name": "FibIter",
+      "loops": [
+        {
+          "type": "while",
+          "condition": "i < n",
+          "variables": [
+            "a",
+            "b",
+            "i",
+            "next"
+          ],
+          "invariants": [
+            "1 <= i <= n",
+            "a >= 0 && b >= 0"
+          ]
+        }
+      ],
+      "preconditions": [],
+      "postconditions": [
+        "(n == 0 ==> f == 0)",
+        "(n == 1 ==> f == 1)",
+        "(n >= 2 ==> f >= 1)"
+      ],
+      "parameters": [
+        {
+          "name": "n",
+          "type": "nat"
+        }
+      ],
+      "returns": [
+        {
+          "name": "f",
+          "type": "nat"
+        }
+      ]
+    }
+  ]
+}
+
+================================================================================
+Done.
