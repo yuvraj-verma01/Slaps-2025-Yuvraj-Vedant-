@@ -46,6 +46,14 @@ def strip_comments(src: str) -> str:
     src = re.sub(r"//.*", "", src)
     return src
 
+def summarize_methods_from_src(src_path: pathlib.Path) -> Dict:
+    """
+    Thin wrapper over week5.run_parser to stay in sync with the authoritative
+    Week 5 parser (multiple methods, loop metadata, etc.).
+    """
+    return week5_parser.run_parser(str(src_path))
+
+
 
 def find_matching_brace(s: str, start: int) -> int:
     """Return index of matching '}' for '{' at start."""
@@ -98,12 +106,12 @@ def extract_first_loop_with_body(src: str, loop_cond: str) -> Optional[LoopSpec]
         # variables will be filled later from assignments if empty
         return LoopSpec(condition=cond, variables=[], body=body, prefix=prefix)
 
-    # For-loops (encoded in Week 5 summary as "i in [start, end]")
+    # For-loops (encoded in Week 5 summary as "i from <start> to <end>")
     for m in FOR_RE.finditer(code):
         var = m.group("var").strip()
         start_v = m.group("start").strip()
         end_v = m.group("end").strip()
-        cond_text = f"{var} in [{start_v}, {end_v}]"
+        cond_text = f"{var} from {start_v} to {end_v}"
         if cond_text != want:
             continue
 
@@ -146,7 +154,7 @@ def find_first_loop_fallback(src: str) -> Optional[LoopSpec]:
         var = m.group("var").strip()
         start_v = m.group("start").strip()
         end_v = m.group("end").strip()
-        cond_text = f"{var} in [{start_v}, {end_v}]"
+        cond_text = f"{var} from {start_v} to {end_v}"
         loop_start = m.start()
         brace_pos = code.find("{", m.end())
         if brace_pos != -1:
@@ -158,7 +166,15 @@ def find_first_loop_fallback(src: str) -> Optional[LoopSpec]:
             return LoopSpec(condition=cond_text, variables=vars_all, body=body, prefix=prefix)
 
     return None
-
+def parse_for_condition(cond_text: str) -> Optional[Tuple[str, str, str]]:
+    """
+    Parse a for-loop condition string of the form "i from start to end".
+    Returns (var, start_expr, end_expr) or None if not a match.
+    """
+    m = re.match(r"^(?P<var>" + IDENT + r")\s+from\s+(?P<start>.+?)\s+to\s+(?P<end>.+)$", cond_text.strip())
+    if not m:
+        return None
+    return m.group("var"), m.group("start"), m.group("end")
 
 # ======================= Z3 helpers ============================
 
@@ -508,6 +524,7 @@ def prune_implied(invariant_map: Dict[Tuple[int, ...], int]) -> Dict[Tuple[int, 
 def synthesize_linear_invariants_for_loop(
     src: str,
     method_summary: Dict,
+    loop_info: Optional[Dict] = None,
     coeff_range=range(-2, 3),
     c_range=range(-5, 6),
     max_invariants: int = 5,
@@ -525,11 +542,12 @@ def synthesize_linear_invariants_for_loop(
     cond: str = ""
     vars_list: List[str] = []
 
-    if loops:
+    if loop_info is None and loops:
         # Use first loop from Week 5 summary
         loop_info = loops[0]
-        cond = (loop_info.get("condition") or "").strip()
-        vars_list = list(loop_info.get("variables") or [])
+        if loop_info:
+            cond = (loop_info.get("condition") or "").strip()
+            vars_list = list(loop_info.get("variables") or [])
         if cond:
             loop_spec = extract_first_loop_with_body(src, cond)
     if loop_spec is None:
@@ -548,10 +566,30 @@ def synthesize_linear_invariants_for_loop(
         return []
 
     cond = loop_spec.condition
+    guard_cond = cond
+
+    # Derive guard/initial value hints for for-loops using structured condition text
+    if loop_info and loop_info.get("type") == "for":
+        parsed = parse_for_condition(loop_info.get("condition", ""))
+        if parsed:
+            f_var, f_start, f_end = parsed
+            guard_cond = f"{f_var} <= {f_end}"
+            if f_var not in vars_list:
+                vars_list = vars_list + [f_var]
 
     # Step 2: build constraints
     assigns = parse_assignments(loop_spec.body)
     initial_vals = extract_initial_values_from_prefix(loop_spec.prefix, vars_list)
+    if loop_info and loop_info.get("type") == "for":
+        parsed = parse_for_condition(loop_info.get("condition", ""))
+        if parsed:
+            f_var, f_start, _ = parsed
+            try:
+                start_int = int(f_start)
+            except ValueError:
+                start_int = None
+            if start_int is not None and f_var not in initial_vals:
+                initial_vals[f_var] = start_int
 
     v_before = {v: Int(v) for v in vars_list}
     v_after = {v: Int(v + "_next") for v in vars_list}
@@ -560,7 +598,7 @@ def synthesize_linear_invariants_for_loop(
     if not trans_cs:
         return []
 
-    guard_z3 = parse_guard(cond, v_before)
+    guard_z3 = parse_guard(guard_cond, v_before)
     preconds = method_summary.get("preconditions", [])
 
     # Step 3: enumerate templates and check invariants
@@ -609,6 +647,30 @@ def synthesize_linear_invariants_for_loop(
             break
 
     return invariants
+def synthesize_linear_invariants_for_method(
+    src: str,
+    method_summary: Dict,
+    coeff_range=range(-2, 3),
+    c_range=range(-5, 6),
+    max_invariants: int = 5,
+) -> List[Dict]:
+    """
+    Synthesize invariants for every loop in a method summary.
+    Returns a list of {"loop": loop_info, "synthesized_invariants": [...]}. If a
+    method has no loops we return an empty list.
+    """
+    results: List[Dict] = []
+    for loop in method_summary.get("loops", []):
+        invs = synthesize_linear_invariants_for_loop(
+            src,
+            method_summary,
+            loop_info=loop,
+            coeff_range=coeff_range,
+            c_range=c_range,
+            max_invariants=max_invariants,
+        )
+        results.append({"loop": loop, "synthesized_invariants": invs})
+    return results
 
 
 # ========================== CLI ===============================
@@ -630,18 +692,36 @@ def main():
     src_path = pathlib.Path(args.source)
     src = src_path.read_text(encoding="utf-8")
 
-    method_summary = week5_parser.parse_dafny(src)
-    invariants = synthesize_linear_invariants_for_loop(src, method_summary)
+    summary = summarize_methods_from_src(src_path)
+    method_summaries = summary.get("methods", [])
 
-    loops = method_summary.get("loops", [])
-    loop_info = loops[0] if loops else None
+    methods_out: List[Dict] = []
+    for m_summary in method_summaries:
+        loop_results = synthesize_linear_invariants_for_method(
+            src,
+            m_summary,
+        )
 
-    result = {
-        "method_name": method_summary.get("method_name"),
-        "loop": loop_info,
-        "synthesized_invariants": invariants,
-    }
+        loop_entries = []
+        for item in loop_results:
+            loop_copy = dict(item.get("loop", {}))
+            loop_copy["synthesized_invariants"] = item.get(
+                "synthesized_invariants", []
+            )
+            loop_entries.append(loop_copy)
 
+        methods_out.append(
+            {
+                "method_name": m_summary.get("method_name"),
+                "preconditions": m_summary.get("preconditions", []),
+                "postconditions": m_summary.get("postconditions", []),
+                "parameters": m_summary.get("parameters", []),
+                "returns": m_summary.get("returns", []),
+                "loops": loop_entries,
+            }
+        )
+
+    result = {"methods": methods_out}
     if args.out:
         out_path = pathlib.Path(args.out)
         out_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
