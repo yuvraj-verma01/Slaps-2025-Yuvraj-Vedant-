@@ -1,0 +1,43 @@
+{
+  "methods": [
+    {
+      "method_name": "DoubleIncrement",
+      "preconditions": [],
+      "postconditions": [],
+      "parameters": [
+        {
+          "name": "n",
+          "type": "int"
+        }
+      ],
+      "returns": [
+        {
+          "name": "i",
+          "type": "int"
+        },
+        {
+          "name": "j",
+          "type": "int"
+        }
+      ],
+      "loops": [
+        {
+          "type": "while",
+          "condition": "i < n && j < 2*n",
+          "variables": [
+            "i",
+            "j"
+          ],
+          "invariants": [],
+          "synthesized_invariants": [
+            "-2*i - j <= 0",
+            "-2*i + j <= 0",
+            "-i - 2*j <= 0",
+            "-i - j <= 0",
+            "-i <= 0"
+          ]
+        }
+      ]
+    }
+  ]
+}

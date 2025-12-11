@@ -1,0 +1,34 @@
+{
+  "methods": [
+    {
+      "method_name": "Counter",
+      "preconditions": [],
+      "postconditions": [],
+      "parameters": [
+        {
+          "name": "n",
+          "type": "int"
+        }
+      ],
+      "returns": [
+        {
+          "name": "i",
+          "type": "int"
+        }
+      ],
+      "loops": [
+        {
+          "type": "while",
+          "condition": "i < n",
+          "variables": [
+            "i"
+          ],
+          "invariants": [],
+          "synthesized_invariants": [
+            "-i <= 0"
+          ]
+        }
+      ]
+    }
+  ]
+}
