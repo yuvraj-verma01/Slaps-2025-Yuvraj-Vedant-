@@ -1,0 +1,344 @@
+{
+  "file": "week3\\problem1.dfy",
+  "method_name": "",
+  "loops": [
+    {
+      "loop_id": 0,
+      "condition": "i < a.Length",
+      "variables": [
+        "i",
+        "prefix",
+        "sum"
+      ],
+      "invariants": [
+        "i - len(a) <= 3",
+        "2*i - 2*len(a) <= 5",
+        "i - len(a) <= 2",
+        "2*i - 2*len(a) <= 3",
+        "i - len(a) <= 1"
+      ],
+      "array_debug": {
+        "variables": [
+          "i",
+          "sum",
+          "len(a)",
+          "a[i]"
+        ],
+        "arrays": [
+          "a"
+        ],
+        "lengths": [
+          "len(a)"
+        ],
+        "array_accesses": [
+          "a[i]"
+        ],
+        "attempts": 941
+      }
+    }
+  ]
+}
+{
+  "file": "week3\\problem2.dfy",
+  "method_name": "",
+  "loops": [
+    {
+      "loop_id": 0,
+      "condition": "y != 0",
+      "variables": [
+        "temp",
+        "x",
+        "y"
+      ],
+      "invariants": [],
+      "array_debug": {
+        "variables": [
+          "temp",
+          "x"
+        ],
+        "arrays": [],
+        "lengths": [],
+        "array_accesses": [],
+        "attempts": 312
+      }
+    }
+  ]
+}
+{
+  "file": "week3\\problem3.dfy",
+  "method_name": "",
+  "loops": [
+    {
+      "loop_id": 0,
+      "condition": "a < n",
+      "variables": [
+        "a",
+        "b",
+        "i",
+        "j"
+      ],
+      "invariants": [
+        "a - n <= 3",
+        "2*a - 2*n <= 5",
+        "a - n <= 2",
+        "2*a - 2*n <= 3",
+        "a - n <= 1"
+      ],
+      "array_debug": {
+        "variables": [
+          "a",
+          "b",
+          "n"
+        ],
+        "arrays": [],
+        "lengths": [],
+        "array_accesses": [],
+        "attempts": 187
+      }
+    },
+    {
+      "loop_id": 1,
+      "condition": "b < n",
+      "variables": [
+        "b",
+        "i",
+        "j"
+      ],
+      "invariants": [
+        "b - n <= 3",
+        "2*b - 2*n <= 5",
+        "b - n <= 2",
+        "2*b - 2*n <= 3",
+        "b - n <= 1"
+      ],
+      "array_debug": {
+        "variables": [
+          "b",
+          "i",
+          "j",
+          "n",
+          "len(nums)"
+        ],
+        "arrays": [
+          "nums"
+        ],
+        "lengths": [
+          "len(nums)"
+        ],
+        "array_accesses": [],
+        "attempts": 4191
+      }
+    }
+  ]
+}
+{
+  "file": "week3\\problem4.dfy",
+  "method_name": "",
+  "loops": [
+    {
+      "loop_id": 0,
+      "condition": "i < r",
+      "variables": [
+        "i",
+        "p"
+      ],
+      "invariants": [
+        "i - r <= 3",
+        "2*i - 2*r <= 5",
+        "i - r <= 2",
+        "2*i - 2*r <= 3",
+        "i - r <= 1"
+      ],
+      "array_debug": {
+        "variables": [
+          "i",
+          "r",
+          "n"
+        ],
+        "arrays": [],
+        "lengths": [],
+        "array_accesses": [],
+        "attempts": 291
+      }
+    }
+  ]
+}
+{
+  "file": "week3\\problem5.dfy",
+  "method_name": "",
+  "loops": [
+    {
+      "loop_id": 0,
+      "condition": "i < r",
+      "variables": [
+        "c",
+        "i"
+      ],
+      "invariants": [
+        "i - r <= 3",
+        "2*i - 2*r <= 5",
+        "i - r <= 2",
+        "2*i - 2*r <= 3",
+        "i - r <= 1"
+      ],
+      "array_debug": {
+        "variables": [
+          "i",
+          "r",
+          "n"
+        ],
+        "arrays": [],
+        "lengths": [],
+        "array_accesses": [],
+        "attempts": 291
+      }
+    }
+  ]
+}
+{
+  "file": "week3\\problem6.dfy",
+  "method_name": "",
+  "loops": [
+    {
+      "loop_id": 0,
+      "condition": "i < r",
+      "variables": [
+        "M",
+        "i"
+      ],
+      "invariants": [
+        "i - r <= 3",
+        "2*i - 2*r <= 5",
+        "i - r <= 2",
+        "2*i - 2*r <= 3",
+        "i - r <= 1"
+      ],
+      "array_debug": {
+        "variables": [
+          "i",
+          "r",
+          "len(mods)"
+        ],
+        "arrays": [
+          "mods"
+        ],
+        "lengths": [
+          "len(mods)"
+        ],
+        "array_accesses": [],
+        "attempts": 291
+      }
+    },
+    {
+      "loop_id": 1,
+      "condition": "i < r",
+      "variables": [
+        "Mi",
+        "ci",
+        "i",
+        "mi",
+        "sum",
+        "t",
+        "vi"
+      ],
+      "invariants": [],
+      "array_debug": {
+        "variables": [
+          "i",
+          "mi",
+          "r",
+          "vi",
+          "len(mods)",
+          "len(vals)",
+          "mods[i]",
+          "vals[i]"
+        ],
+        "arrays": [
+          "mods",
+          "vals"
+        ],
+        "lengths": [
+          "len(mods)",
+          "len(vals)"
+        ],
+        "array_accesses": [
+          "mods[i]",
+          "vals[i]"
+        ],
+        "attempts": 9001
+      }
+    }
+  ]
+}
+{
+  "file": "week3\\problem7.dfy",
+  "method_name": "",
+  "loops": [
+    {
+      "loop_id": 0,
+      "condition": "j < high",
+      "variables": [
+        "i",
+        "j"
+      ],
+      "invariants": [
+        "high + i - j + len(a) <= 3",
+        "2*high + 2*i - 2*j + 2*len(a) <= 5",
+        "high + i - j + len(a) <= 2",
+        "2*high + 2*i - 2*j + 2*len(a) <= 3",
+        "high + i - j + len(a) <= 1"
+      ],
+      "array_debug": {
+        "variables": [
+          "high",
+          "i",
+          "j",
+          "len(a)"
+        ],
+        "arrays": [
+          "a"
+        ],
+        "lengths": [
+          "len(a)"
+        ],
+        "array_accesses": [],
+        "attempts": 265
+      }
+    }
+  ]
+}
+{
+  "file": "week3\\problem8.dfy",
+  "method_name": "",
+  "loops": [
+    {
+      "loop_id": 0,
+      "condition": "i < n",
+      "variables": [
+        "a",
+        "b",
+        "i",
+        "next"
+      ],
+      "invariants": [
+        "i - n <= 3",
+        "2*i - 2*n <= 5",
+        "i - n <= 2",
+        "2*i - 2*n <= 3",
+        "i - n <= 1"
+      ],
+      "array_debug": {
+        "variables": [
+          "a",
+          "b",
+          "i",
+          "n"
+        ],
+        "arrays": [],
+        "lengths": [],
+        "array_accesses": [],
+        "attempts": 3957
+      }
+    }
+  ]
+}

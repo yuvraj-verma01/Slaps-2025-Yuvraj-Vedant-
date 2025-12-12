@@ -1,0 +1,191 @@
+[
+  {
+    "file": "week3\\benchmark_boolean.dfy",
+    "variants": [
+      {
+        "strategy": "disjunctive-linear",
+        "invariants": [
+          "(3*flag <= 10 && b - 3*i <= 10) || (a - b - 3*i <= -10 && a - 3*i <= 0 && a - 2*i <= 0)"
+        ],
+        "out_file": "final_outputs\\benchmark_boolean\\benchmark_boolean__disjunctive-linear.dfy",
+        "dafny": {
+          "command": [
+            "dafny",
+            "final_outputs\\benchmark_boolean\\benchmark_boolean__disjunctive-linear.dfy"
+          ],
+          "returncode": 0,
+          "output": "Warning: this way of using the CLI is deprecated. Use 'dafny --help' to see help for the new Dafny CLI format\n\nDafny program verifier finished with 1 verified, 0 errors\nCompiled assembly into benchmark_boolean__disjunctive-linear.dll\n"
+        },
+        "details": {
+          "engine": "disjunctive-linear"
+        }
+      },
+      {
+        "strategy": "boolean",
+        "invariants": [
+          "(-a <= 0 && -flag <= 0)"
+        ],
+        "out_file": "final_outputs\\benchmark_boolean\\benchmark_boolean__boolean.dfy",
+        "dafny": {
+          "command": [
+            "dafny",
+            "final_outputs\\benchmark_boolean\\benchmark_boolean__boolean.dfy"
+          ],
+          "returncode": 0,
+          "output": "Warning: this way of using the CLI is deprecated. Use 'dafny --help' to see help for the new Dafny CLI format\n\nDafny program verifier finished with 1 verified, 0 errors\nCompiled assembly into benchmark_boolean__boolean.dll\n"
+        },
+        "details": {
+          "engine": "boolean"
+        }
+      },
+      {
+        "strategy": "linear",
+        "invariants": [
+          "3*flag <= 10",
+          "b - 3*i <= 10",
+          "a - b - 3*i <= -10",
+          "a - 3*i <= 0",
+          "a - 2*i <= 0"
+        ],
+        "out_file": "final_outputs\\benchmark_boolean\\benchmark_boolean__linear.dfy",
+        "dafny": {
+          "command": [
+            "dafny",
+            "final_outputs\\benchmark_boolean\\benchmark_boolean__linear.dfy"
+          ],
+          "returncode": 0,
+          "output": "Warning: this way of using the CLI is deprecated. Use 'dafny --help' to see help for the new Dafny CLI format\n\nDafny program verifier finished with 1 verified, 0 errors\nCompiled assembly into benchmark_boolean__linear.dll\n"
+        },
+        "details": {
+          "engine": "linear"
+        }
+      }
+    ]
+  },
+  {
+    "file": "week3\\booleanproblem1.dfy",
+    "variants": [
+      {
+        "strategy": "disjunctive-linear",
+        "invariants": [
+          "(flip <= 1 && flip + i <= 5) || (2*flip + i <= 10 && 3*flip <= 4 && 3*flip + i <= 7)"
+        ],
+        "out_file": "final_outputs\\booleanproblem1\\booleanproblem1__disjunctive-linear.dfy",
+        "dafny": {
+          "command": [
+            "dafny",
+            "final_outputs\\booleanproblem1\\booleanproblem1__disjunctive-linear.dfy"
+          ],
+          "returncode": 0,
+          "output": "Warning: this way of using the CLI is deprecated. Use 'dafny --help' to see help for the new Dafny CLI format\n\nDafny program verifier finished with 1 verified, 0 errors\nCompiled assembly into booleanproblem1__disjunctive-linear.dll\n"
+        },
+        "details": {
+          "engine": "disjunctive-linear"
+        }
+      },
+      {
+        "strategy": "boolean",
+        "invariants": [
+          "(-flip <= 0 && -i <= 0 && -x <= 0)"
+        ],
+        "out_file": "final_outputs\\booleanproblem1\\booleanproblem1__boolean.dfy",
+        "dafny": {
+          "command": [
+            "dafny",
+            "final_outputs\\booleanproblem1\\booleanproblem1__boolean.dfy"
+          ],
+          "returncode": 0,
+          "output": "Warning: this way of using the CLI is deprecated. Use 'dafny --help' to see help for the new Dafny CLI format\n\nDafny program verifier finished with 1 verified, 0 errors\nCompiled assembly into booleanproblem1__boolean.dll\n"
+        },
+        "details": {
+          "engine": "boolean"
+        }
+      },
+      {
+        "strategy": "linear",
+        "invariants": [
+          "flip <= 1",
+          "flip + i <= 5",
+          "2*flip + i <= 10",
+          "3*flip <= 4",
+          "3*flip + i <= 7"
+        ],
+        "out_file": "final_outputs\\booleanproblem1\\booleanproblem1__linear.dfy",
+        "dafny": {
+          "command": [
+            "dafny",
+            "final_outputs\\booleanproblem1\\booleanproblem1__linear.dfy"
+          ],
+          "returncode": 0,
+          "output": "Warning: this way of using the CLI is deprecated. Use 'dafny --help' to see help for the new Dafny CLI format\n\nDafny program verifier finished with 1 verified, 0 errors\nCompiled assembly into booleanproblem1__linear.dll\n"
+        },
+        "details": {
+          "engine": "linear"
+        }
+      }
+    ]
+  },
+  {
+    "file": "week3\\evenodd.dfy",
+    "variants": [
+      {
+        "strategy": "disjunctive-linear",
+        "invariants": [
+          "(i - pos <= 0 && 3*i - 2*neg - pos <= 10) || (3*i - neg - 3*pos <= 0 && 3*i - neg - 2*pos <= 0 && 3*i - 3*pos <= 1)"
+        ],
+        "out_file": "final_outputs\\evenodd\\evenodd__disjunctive-linear.dfy",
+        "dafny": {
+          "command": [
+            "dafny",
+            "final_outputs\\evenodd\\evenodd__disjunctive-linear.dfy"
+          ],
+          "returncode": 4,
+          "output": "Warning: this way of using the CLI is deprecated. Use 'dafny --help' to see help for the new Dafny CLI format\nfinal_outputs/evenodd/evenodd__disjunctive-linear.dfy(9,56): Error: this invariant could not be proved to be maintained by the loop\n"
+        },
+        "details": {
+          "engine": "disjunctive-linear"
+        }
+      },
+      {
+        "strategy": "boolean",
+        "invariants": [
+          "(-i <= 0 && -neg <= 0 && -pos <= 0)"
+        ],
+        "out_file": "final_outputs\\evenodd\\evenodd__boolean.dfy",
+        "dafny": {
+          "command": [
+            "dafny",
+            "final_outputs\\evenodd\\evenodd__boolean.dfy"
+          ],
+          "returncode": 0,
+          "output": "Warning: this way of using the CLI is deprecated. Use 'dafny --help' to see help for the new Dafny CLI format\n\nDafny program verifier finished with 1 verified, 0 errors\nCompiled assembly into evenodd__boolean.dll\n"
+        },
+        "details": {
+          "engine": "boolean"
+        }
+      },
+      {
+        "strategy": "linear",
+        "invariants": [
+          "i - pos <= 0",
+          "3*i - 2*neg - pos <= 10",
+          "3*i - neg - 3*pos <= 0",
+          "3*i - neg - 2*pos <= 0",
+          "3*i - 3*pos <= 1"
+        ],
+        "out_file": "final_outputs\\evenodd\\evenodd__linear.dfy",
+        "dafny": {
+          "command": [
+            "dafny",
+            "final_outputs\\evenodd\\evenodd__linear.dfy"
+          ],
+          "returncode": 4,
+          "output": "Warning: this way of using the CLI is deprecated. Use 'dafny --help' to see help for the new Dafny CLI format\nfinal_outputs/evenodd/evenodd__linear.dfy: invariant violation\n"
+        },
+        "details": {
+          "engine": "linear"
+        }
+      }
+    ]
+  }
+]
