@@ -298,8 +298,19 @@ def parse_guard_ext(cond: str, env: VarEnv):
     return And(atoms)
 
 
-def extract_initial_values_from_prefix(prefix: str, vars_list: List[str]) -> Dict[str, int]:
-    init: Dict[str, int] = {}
+def extract_initial_info_from_prefix(
+    prefix: str,
+    vars_list: List[str],
+    env: VarEnv,
+) -> Tuple[Dict[str, int], List[Any]]:
+    """
+    Collect initial assignments appearing before the loop.
+    - Numeric constants go into init_vals.
+    - Linear, parseable expressions become equality constraints.
+    """
+    init_vals: Dict[str, int] = {}
+    init_constraints: List[Any] = []
+
     for m in ASSIGN_EXT_RE.finditer(prefix):
         lhs = m.group("lhs").strip()
         rhs = m.group("rhs").strip()
@@ -307,9 +318,17 @@ def extract_initial_values_from_prefix(prefix: str, vars_list: List[str]) -> Dic
             continue
         if lhs not in vars_list:
             continue
+        # numeric literal
         if re.fullmatch(r"-?\d+", rhs):
-            init[lhs] = int(rhs)
-    return init
+            init_vals[lhs] = int(rhs)
+            continue
+
+        # symbolic/linear rhs we can parse
+        rhs_expr = parse_linear_expr_ext(rhs, env)
+        if rhs_expr is not None and lhs in env.scalars:
+            init_constraints.append(env.scalars[lhs] == rhs_expr)
+
+    return init_vals, init_constraints
 
 
 def build_transition_constraints_ext(
@@ -452,6 +471,7 @@ def check_linear_invariant_ext(
     v_before: Dict[str, Any],
     v_after: Dict[str, Any],
     initial_vals: Dict[str, int],
+    initial_constraints: List[Any],
 ) -> bool:
     length_nonneg = [v_before[name] >= 0 for name in v_before if name.startswith("len(")]
     length_nonneg_next = [v_after[name] >= 0 for name in v_after if name.startswith("len(")]
@@ -470,18 +490,19 @@ def check_linear_invariant_ext(
         return False
 
     # initialization
-    if initial_vals:
-        s_init = Solver()
-        if length_nonneg:
-            s_init.add(*length_nonneg)
-        for v, val in initial_vals.items():
-            if v in v_before:
-                s_init.add(v_before[v] == val)
-        if guard_expr is not None:
-            s_init.add(guard_expr)
-        s_init.add(Not(inv))
-        if s_init.check() == sat:
-            return False
+    s_init = Solver()
+    if length_nonneg:
+        s_init.add(*length_nonneg)
+    for v, val in initial_vals.items():
+        if v in v_before:
+            s_init.add(v_before[v] == val)
+    if initial_constraints:
+        s_init.add(*initial_constraints)
+    if guard_expr is not None:
+        s_init.add(guard_expr)
+    s_init.add(Not(inv))
+    if s_init.check() == sat:
+        return False
 
     # inductiveness
     if trans_constraints is not None:
@@ -520,6 +541,7 @@ def guard_based_candidates(
     v_before: Dict[str, Any],
     v_after: Dict[str, Any],
     initial_vals: Dict[str, int],
+    initial_constraints: List[Any],
 ) -> List[str]:
     candidates: List[str] = []
     seen = set()
@@ -593,6 +615,7 @@ def guard_based_candidates(
             v_before,
             v_after,
             initial_vals,
+            initial_constraints,
         ):
             s = pretty_print_linear(var_names, norm_coeffs, norm_c)
             if s:
@@ -729,7 +752,9 @@ def synthesize_linear_invariants_for_loop(
         if key in env_after.extra_terms:
             v_after_exprs[key] = env_after.extra_terms[key]
 
-    initial_vals = extract_initial_values_from_prefix(loop.prefix, list(ordered_scalars))
+    initial_vals, initial_constraints = extract_initial_info_from_prefix(
+        loop.prefix, list(ordered_scalars), env_before
+    )
 
     found: List[Tuple[Tuple[int, ...], int, str]] = []
     seen = set()
@@ -753,6 +778,7 @@ def synthesize_linear_invariants_for_loop(
             v_before_exprs,
             v_after_exprs,
             initial_vals,
+            initial_constraints,
         ):
             s = pretty_print_linear(var_names, norm_coeffs, norm_c)
             if s:
@@ -771,6 +797,7 @@ def synthesize_linear_invariants_for_loop(
             v_before_exprs,
             v_after_exprs,
             initial_vals,
+            initial_constraints,
         )
         invariants.extend(guard_fallback)
 

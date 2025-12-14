@@ -1,301 +1,329 @@
 from __future__ import annotations
-import re
+
+import argparse
 import json
-import subprocess
-import tempfile
 import pathlib
+import re
+import subprocess
 import sys
-from dataclasses import dataclass
-from typing import List, Dict, Optional
+import tempfile
+from typing import Dict, List, Optional, Tuple
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+# Make week modules importable
 sys.path.append(str(ROOT / "week5"))
 sys.path.append(str(ROOT / "week6"))
+sys.path.append(str(ROOT / "week9"))
+sys.path.append(str(ROOT / "week10"))
+sys.path.append(str(ROOT / "week11"))
+sys.path.append(str(ROOT / "week12"))
 
-import parser as week5_parser  
-import linear_invariants as week6_lin  
+# Optional imports
+try:
+    import parser as week5_parser  # type: ignore
+except ImportError:
+    week5_parser = None
+
+try:
+    import linear_invariants as linv_linear  # type: ignore
+except ImportError:
+    linv_linear = None
+
+try:
+    import bool_linear_invariants as linv_bool  # type: ignore
+except ImportError:
+    linv_bool = None
+
+try:
+    import disjunctive_invariants as dinv  # type: ignore
+except ImportError:
+    dinv = None
+
+try:
+    import quadratic_invariants as qinv  # type: ignore
+except ImportError:
+    qinv = None
+
+try:
+    import array_list_invariants as arrinv  # type: ignore
+except ImportError:
+    arrinv = None
 
 
-# data structures
+# -------------------------- loop handling --------------------------
 
-@dataclass
-class LoopMatch:
-    kind: str              # "while" or "for"
-    cond_text: str         # condition or for-range summary
-    start_idx: int         # index of 'while' or 'for'
-    header_end_idx: int    # end of the loop header 
-    indent: str            
-
-
-# parsing helpers 
-
-IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
-
-WHILE_RE = re.compile(r"(?P<indent>[ \t]*)while\s*\((?P<cond>[^)]*)\)")
-FOR_RE = re.compile(
-    r"(?P<indent>[ \t]*)for\s+(?P<var>" + IDENT + r")\s*:=\s*(?P<start>[^\s]+)\s*to\s*(?P<end>[^\s{]+)"
+WHILE_RE = re.compile(
+    r"while\s*"
+    r"(?:\((?P<cond_paren>[^)]*)\)|(?P<cond_noparen>[^{]*?))"
+    r"\s*(?P<brace>\{)",
+    re.DOTALL,
 )
 
 
-def strip_comments(src: str) -> str:
-    """Strip // and /* ... */ comments."""
-    src = re.sub(r"/\*.*?\*/", "", src, flags=re.DOTALL)
-    src = re.sub(r"//.*", "", src)
-    return src
+def find_first_while(src: str) -> Optional[re.Match]:
+    return WHILE_RE.search(src)
 
 
-def find_loop_match_by_condition(src: str, cond: str) -> Optional[LoopMatch]:
-    code = src
+def insert_invariants(src: str, invariants: List[str]) -> str:
+    """Insert invariants before the first loop body brace."""
+    clean: List[str] = []
+    seen = set()
+    for inv in invariants:
+        inv = (inv or "").strip()
+        if not inv:
+            continue
+        if inv in seen:
+            continue
+        seen.add(inv)
+        if "||" in inv and not (inv.startswith("(") and inv.endswith(")")):
+            inv = f"({inv})"
+        clean.append(inv)
 
-    # while-loops
-    for m in WHILE_RE.finditer(code):
-        if m.group("cond").strip() == cond.strip():
-            return LoopMatch(
-                kind="while",
-                cond_text=cond.strip(),
-                start_idx=m.start(),
-                header_end_idx=m.end(),
-                indent=m.group("indent"),
-            )
-
-    # for-loops
-    for m in FOR_RE.finditer(code):
-        var = m.group("var").strip()
-        start_v = m.group("start").strip()
-        end_v = m.group("end").strip()
-        cond_text = f"{var} in [{start_v}, {end_v}]"
-        if cond_text == cond.strip():
-            return LoopMatch(
-                kind="for",
-                cond_text=cond_text,
-                start_idx=m.start(),
-                header_end_idx=m.end(),
-                indent=m.group("indent"),
-            )
-
-    return None
-
-
-def find_first_loop_fallback(src: str) -> Optional[LoopMatch]:
-    code = src
-
-    m = WHILE_RE.search(code)
-    if m:
-        cond = m.group("cond").strip()
-        return LoopMatch(
-            kind="while",
-            cond_text=cond,
-            start_idx=m.start(),
-            header_end_idx=m.end(),
-            indent=m.group("indent"),
-        )
-
-    m = FOR_RE.search(code)
-    if m:
-        var = m.group("var").strip()
-        start_v = m.group("start").strip()
-        end_v = m.group("end").strip()
-        cond_text = f"{var} in [{start_v}, {end_v}]"
-        return LoopMatch(
-            kind="for",
-            cond_text=cond_text,
-            start_idx=m.start(),
-            header_end_idx=m.end(),
-            indent=m.group("indent"),
-        )
-
-    return None
-
-
-# invariant loading
-
-def load_invariants(inv_json_path: Optional[str], src: str, method_summary: Dict) -> List[str]:
-    # load invariants from JSON if provided, otherwise synthesize using Week 6.
-    if inv_json_path:
-        data = json.loads(pathlib.Path(inv_json_path).read_text(encoding="utf-8"))
-
-        if isinstance(data, dict):
-            if "synthesized_invariants" in data:
-                return list(data["synthesized_invariants"])
-            if "invariants" in data:
-                return list(data["invariants"])
-            loop = data.get("loop")
-            if isinstance(loop, dict) and "synthesized_invariants" in loop:
-                return list(loop["synthesized_invariants"])
-
-        return []
-
-    # No JSON provided: synthesize with Week 6
-    invs = week6_lin.synthesize_linear_invariants_for_loop(src, method_summary)
-    return invs or []
-
-
-# ======================= Invariant insertion =======================
-
-def insert_invariants_into_loop(src: str, loop: LoopMatch, invariants: List[str]) -> str:
-     # insert invariant clauses right after the loop header, before the '{'.
-    if not invariants:
+    if not clean:
         return src
 
-    insert_pos = loop.header_end_idx
+    m = find_first_while(src)
+    if not m:
+        return src
 
-    inv_lines = "".join(
-        f"\n{loop.indent}  invariant {inv}" for inv in invariants
-    )
-
-    return src[:insert_pos] + inv_lines + src[insert_pos:]
-
-
-# dafny runner
-
-def run_dafny_verify(dafny_path: str, dfy_path: pathlib.Path) -> Dict[str, str]:
-    """
-    run Dafny verifier on the given .dfy file.
-    returns:
-      {
-        "ok": "true"/"false",
-        "raw_output": "<full stdout+stderr>"
-      }
-    """
-    try:
-        completed = subprocess.run(
-            [dafny_path, "/compile:0", str(dfy_path)],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    except FileNotFoundError:
-        return {
-            "ok": "false",
-            "raw_output": "Error: Dafny executable not found. Please ensure 'dafny' is on PATH."
-        }
-
-    output = (completed.stdout or "") + (completed.stderr or "")
-
-    ok = ("Dafny program verifier finished" in output and "0 errors" in output)
-
-    return {
-        "ok": "true" if ok else "false",
-        "raw_output": output.strip(),
-    }
-
-
-# ======================= Pipeline =======================
-
-def build_and_verify(
-    src_path: pathlib.Path,
-    inv_json_path: Optional[str],
-    out_path: Optional[str],
-    run_dafny: bool,
-    dafny_exe: str,
-) -> Dict:
-    """
-    Full Week 7 pipeline for a single program:
-      1. Parse with Week 5.
-      2. Get invariants (JSON or Week 6).
-      3. Locate loop (summary-based, then fallback).
-      4. Insert invariants (if any).
-      5. Optionally run Dafny.
-      6. Return a JSON-able summary.
-    """
-    src = src_path.read_text(encoding="utf-8")
-    parsed = week5_parser.run_parser(str(src_path))
-    methods = parsed.get("methods", []) if isinstance(parsed, dict) else []
-    method_summary = methods[0] if methods else {}
-
-    # Step 1+2: get invariants
-    invariants = load_invariants(inv_json_path, src, method_summary)
-
-    # Step 3: locate loop
-    loops = method_summary.get("loops", [])
-    loop_match: Optional[LoopMatch] = None
-
-    if loops:
-        first = loops[0]
-        cond = (first.get("condition") or "").strip()
-        if cond:
-            loop_match = find_loop_match_by_condition(src, cond)
-
-    if loop_match is None:
-        loop_match = find_first_loop_fallback(src)
-
-    # Step 4: insert invariants (if we have a loop + invariants)
-    if loop_match is not None and invariants:
-        instrumented = insert_invariants_into_loop(src, loop_match, invariants)
+    brace_pos = m.start("brace")
+    line_start = src.rfind("\n", 0, m.start())
+    if line_start == -1:
+        line_start = 0
     else:
-        instrumented = src
+        line_start += 1
+    while_indent = src[line_start:m.start()]
+    inv_indent = while_indent + "  "
 
-    # Write instrumented program if requested
-    out_written = ""
-    if out_path:
-        out_file = pathlib.Path(out_path)
-        out_file.write_text(instrumented, encoding="utf-8")
-        out_written = str(out_file)
-
-    # Step 5: optionally run Dafny
-    verify_result: Dict[str, str] = {"ok": "false", "raw_output": ""}
-    if run_dafny:
-        if out_path:
-            dfy_to_check = pathlib.Path(out_path)
-        else:
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".dfy")
-            tmp.write(instrumented.encode("utf-8"))
-            tmp.flush()
-            tmp.close()
-            dfy_to_check = pathlib.Path(tmp.name)
-
-        verify_result = run_dafny_verify(dafny_exe, dfy_to_check)
-
-    return {
-        "method_name": method_summary.get("method_name"),
-        "loop_condition": loop_match.cond_text if loop_match else None,
-        "inserted_invariants": invariants if (loop_match and invariants) else [],
-        "output_path": out_written,
-        "verification": verify_result,
-    }
+    block = "".join(f"\n{inv_indent}invariant {inv}" for inv in clean)
+    return src[:brace_pos] + block + src[brace_pos:]
 
 
-# ========================== CLI ===============================
+# --------------------------- helpers -------------------------------
+
+def adapt_method_summary(raw: Dict) -> Dict:
+    """Try available adaptors; otherwise return raw dict."""
+    for mod in (linv_bool, dinv, arrinv):
+        if mod and hasattr(mod, "adapt_method_summary"):
+            try:
+                return mod.adapt_method_summary(raw)  # type: ignore[attr-defined]
+            except Exception:
+                continue
+    return raw or {}
+
+
+def load_method_summary(src_path: pathlib.Path, summary_path: Optional[pathlib.Path]) -> Dict:
+    if summary_path is not None:
+        try:
+            return adapt_method_summary(json.loads(summary_path.read_text(encoding="utf-8")))
+        except Exception:
+            return {}
+    if week5_parser is not None:
+        try:
+            raw = week5_parser.run_parser(str(src_path))  # type: ignore[attr-defined]
+            return adapt_method_summary(raw)
+        except Exception:
+            return {}
+    return {}
+
+
+# -------------------- synthesizer dispatch -------------------------
+
+def synthesize_linear(src: str, method_summary: Dict) -> Tuple[List[str], Dict]:
+    if linv_linear is None:
+        return [], {"error": "linear invariants unavailable"}
+    try:
+        invs = linv_linear.synthesize_linear_invariants_for_loop(src, method_summary)  # type: ignore
+        return invs or [], {"engine": "linear"}
+    except Exception as e:
+        return [], {"error": f"linear synthesis failed: {e}"}
+
+
+def synthesize_boolean(src: str, method_summary: Dict) -> Tuple[List[str], Dict]:
+    if linv_bool is None:
+        return [], {"error": "boolean invariants unavailable"}
+    try:
+        invs = linv_bool.synthesize_boolean_dnf_invariant_for_loop(src, method_summary)  # type: ignore
+        return invs or [], {"engine": "boolean"}
+    except Exception as e:
+        return [], {"error": f"boolean synthesis failed: {e}"}
+
+
+def synthesize_disjunctive(src: str, method_summary: Dict) -> Tuple[List[str], Dict]:
+    if dinv is None:
+        return [], {"error": "disjunctive invariants unavailable"}
+    try:
+        res = dinv.synthesize_disjunctive_invariants_for_method(  # type: ignore[attr-defined]
+            src,
+            method_summary,
+            use_boolean=False,  # equivalent to passing --no-bool
+        )
+        loops = res.get("loops", []) or []
+        invs: List[str] = []
+        if loops:
+            for entry in loops[0].get("disjunctive_invariants", []):
+                dnf = entry.get("dnf")
+                if isinstance(dnf, str) and dnf.strip():
+                    invs.append(dnf.strip())
+        return invs, {"engine": "disjunctive", "raw": res}
+    except Exception as e:
+        return [], {"error": f"disjunctive synthesis failed: {e}"}
+
+
+def synthesize_quadratic(src_path: pathlib.Path) -> Tuple[List[str], Dict]:
+    if qinv is None:
+        return [], {"error": "quadratic invariants unavailable"}
+    try:
+        res = qinv.synthesize_quadratic_invariants_for_file(src_path, summary_json=None)  # type: ignore[attr-defined]
+        methods = res.get("methods") or []
+        invs: List[str] = []
+        if methods:
+            loops = methods[0].get("loops") or []
+            if loops:
+                invs = [
+                    s.strip()
+                    for s in loops[0].get("quadratic_invariants", [])
+                    if isinstance(s, str) and s.strip()
+                ]
+        return invs, {"engine": "quadratic", "raw": res}
+    except Exception as e:
+        return [], {"error": f"quadratic synthesis failed: {e}"}
+
+
+def synthesize_arrays(src_path: pathlib.Path) -> Tuple[List[str], Dict]:
+    if arrinv is None:
+        return [], {"error": "array/list invariants unavailable"}
+    try:
+        res = arrinv.synthesize_invariants_for_file(src_path, summary_json=None)  # type: ignore[attr-defined]
+        loops = res.get("loops") or []
+        invs: List[str] = []
+        if loops:
+            invs = [
+                s.strip()
+                for s in loops[0].get("invariants", [])
+                if isinstance(s, str) and s.strip()
+            ]
+        return invs, {"engine": "arrays", "raw": res}
+    except Exception as e:
+        return [], {"error": f"arrays synthesis failed: {e}"}
+
+
+def synthesize_invariants(mode: str, src: str, src_path: pathlib.Path, method_summary: Dict) -> Tuple[List[str], Dict]:
+    mode = mode.lower()
+    if mode == "linear":
+        return synthesize_linear(src, method_summary)
+    if mode == "boolean":
+        return synthesize_boolean(src, method_summary)
+    if mode == "disjunctive":
+        return synthesize_disjunctive(src, method_summary)
+    if mode == "quadratic":
+        return synthesize_quadratic(src_path)
+    if mode == "arrays":
+        return synthesize_arrays(src_path)
+    return [], {"error": f"unknown mode: {mode}"}
+
+
+def normalize_len_notation(invariants: List[str]) -> List[str]:
+    """Convert len(x) to x.Length for Dafny syntax."""
+    out: List[str] = []
+    pattern = re.compile(r"\blen\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)")
+    for inv in invariants:
+        out.append(pattern.sub(r"\1.Length", inv))
+    return out
+
+
+# --------------------------- dafny --------------------------------
+
+def run_dafny(dafny_cmd: str, target: pathlib.Path) -> Dict[str, object]:
+    cmd = [dafny_cmd, str(target)]
+    try:
+        res = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        return {"command": cmd, "returncode": res.returncode, "output": res.stdout}
+    except FileNotFoundError:
+        return {"command": cmd, "returncode": 1, "output": f"Dafny not found: {dafny_cmd}"}
+
+
+# ----------------------------- CLI --------------------------------
 
 def main():
-    import argparse
-
     ap = argparse.ArgumentParser(
-        description="Week 7: Automated Correctness Checking Pipeline"
+        description="Final auto-verify: choose a mode (linear / boolean / disjunctive / quadratic / arrays), synthesize invariants, inject, optionally run Dafny."
     )
-    ap.add_argument("source", help="Path to a .dfy file")
+    ap.add_argument("file", help="Input Dafny (.dfy) file")
     ap.add_argument(
-        "--inv",
-        help="Path to invariants JSON (if omitted, uses Week 6 synthesizer)",
-        default=None,
+        "--mode",
+        required=True,
+        choices=["linear", "boolean", "disjunctive", "quadratic", "arrays"],
+        help="Invariant strategy to use.",
+    )
+    ap.add_argument(
+        "--summary",
+        help="Optional Week 5 JSON summary (used for linear/boolean/disjunctive modes).",
     )
     ap.add_argument(
         "--out",
-        help="Path to write instrumented Dafny program",
-        default=None,
+        help="Write instrumented Dafny to this path. If omitted, a temp file is used for Dafny verification.",
     )
     ap.add_argument(
         "--run-dafny",
-        help="Run Dafny verifier on the instrumented program",
         action="store_true",
+        help="Run Dafny verifier on the instrumented program.",
     )
     ap.add_argument(
         "--dafny",
-        help="Dafny executable name or path",
         default="dafny",
+        help="Dafny executable/command to use with --run-dafny.",
     )
 
     args = ap.parse_args()
 
-    src_path = pathlib.Path(args.source)
-    result = build_and_verify(
-        src_path=src_path,
-        inv_json_path=args.inv,
-        out_path=args.out,
-        run_dafny=args.run_dafny,
-        dafny_exe=args.dafny,
+    src_path = pathlib.Path(args.file)
+    src = src_path.read_text(encoding="utf-8")
+    summary_path = pathlib.Path(args.summary) if args.summary else None
+    method_summary = load_method_summary(src_path, summary_path)
+
+    invariants, detail = synthesize_invariants(args.mode, src, src_path, method_summary)
+    dafny_invariants = normalize_len_notation(invariants)
+
+    instrumented = insert_invariants(src, dafny_invariants) if dafny_invariants else src
+
+    out_written: Optional[pathlib.Path] = None
+    if args.out:
+        out_written = pathlib.Path(args.out)
+        out_written.write_text(instrumented, encoding="utf-8")
+
+    dafny_result: Optional[Dict[str, object]] = None
+    if args.run_dafny:
+        target = out_written
+        if target is None:
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".dfy")
+            tmp.write(instrumented.encode("utf-8"))
+            tmp.flush()
+            tmp.close()
+            target = pathlib.Path(tmp.name)
+        dafny_result = run_dafny(args.dafny, target)
+
+    method_name = (
+        method_summary.get("method_name")
+        or detail.get("raw", {}).get("method_name")
+        or src_path.stem
     )
 
+    result = {
+        "file": str(src_path),
+        "mode": args.mode,
+        "method_name": method_name,
+        "invariants": dafny_invariants,
+        "output_path": str(out_written) if out_written else None,
+        "dafny": dafny_result,
+        "detail": detail,
+    }
     print(json.dumps(result, indent=2))
 
 
