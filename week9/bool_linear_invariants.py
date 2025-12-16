@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import os
 import pathlib
 import re
 import sys
@@ -9,7 +10,7 @@ from dataclasses import dataclass
 from math import gcd as math_gcd
 from typing import Dict, List, Optional, Tuple
 
-from z3 import And, Int, Not, Or, Solver, sat
+from z3 import And, Int, IntVal, Not, Or, Solver, sat
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT / "week5"))
@@ -302,6 +303,72 @@ def parse_guard(cond: str, var_map: Dict[str, Int]):
     if len(atoms) == 1:
         return atoms[0]
     return And(atoms)
+
+
+def get_loop_semantics(
+    src: str,
+    method_summary: Dict,
+    loop_id: int = 0,
+):
+    """
+    Expose Z3 variables, initial substitutions, guard, and per-variable updates
+    for a given loop without changing existing synthesis interfaces.
+    """
+    ms = adapt_method_summary(method_summary)
+    loops = ms.get("loops", []) or []
+
+    loop_spec: Optional[LoopSpec] = None
+    vars_list: List[str] = []
+    cond: str = ""
+
+    loop_info = None
+    if loops:
+        if 0 <= loop_id < len(loops):
+            loop_info = loops[loop_id]
+        else:
+            loop_info = loops[0]
+
+    if loop_info:
+        cond = (loop_info.get("condition") or "").strip()
+        vars_list = list(loop_info.get("variables") or [])
+        if cond:
+            loop_spec = extract_loop_by_condition(src, cond, vars_list)
+
+    if loop_spec is None:
+        loop_spec = find_first_loop_fallback(src)
+    if loop_spec is None:
+        return {}, {}, None, {}
+
+    if not vars_list:
+        vars_list = loop_spec.variables or sorted({lhs for lhs, _ in parse_assignments(loop_spec.body)})
+    if not vars_list:
+        return {}, {}, None, {}
+
+    cond = loop_spec.condition
+    assigns = parse_assignments(loop_spec.body)
+
+    v_before = {v: Int(v) for v in vars_list}
+    guard_z3 = parse_guard(cond, v_before)
+
+    updates: Dict[str, object] = {}
+    for lhs, rhs in assigns:
+        if lhs not in v_before:
+            continue
+        rhs_z3 = parse_linear_expr(rhs, v_before)
+        if rhs_z3 is None:
+            rhs_z3 = v_before[lhs]
+        elif isinstance(rhs_z3, int):
+            rhs_z3 = IntVal(rhs_z3)
+        updates[lhs] = rhs_z3
+
+    for v in vars_list:
+        if v not in updates:
+            updates[v] = v_before[v]
+
+    init_vals = extract_initial_values_from_prefix(loop_spec.prefix, vars_list)
+    init_subst = {v: IntVal(val) for v, val in init_vals.items() if v in v_before}
+
+    return v_before, init_subst, guard_z3, updates
 
 
 
@@ -626,6 +693,98 @@ def format_dnf(
     return " || ".join(parts)
 
 
+def _synthesize_boolean_dnf_atoms_first(
+    vars_list: List[str],
+    guard_expr,
+    trans_constraints,
+    initial_vals: Dict[str, int],
+    coeff_range=COEFF_RANGE_BOOL,
+    c_range=C_RANGE_BOOL,
+    max_atoms: int = 12,
+    max_clause_size: int = 3,
+    max_clauses: int = 2,
+    max_clause_candidates: int = 48,
+    max_dnf_checks: int = 200,
+) -> List[str]:
+    """
+    Greedy DNF-first synthesis:
+      1) enumerate small atoms, keep those consistent with the guard
+      2) build small conjunctions (clauses) that are also guard-consistent
+      3) try DNFs in a fixed order and stop at the first inductive one
+    """
+    if trans_constraints is None or not vars_list:
+        return []
+
+    v_before = {v: Int(v) for v in vars_list}
+
+    atoms = collect_candidate_atoms(
+        vars_list,
+        guard_expr=guard_expr,
+        v_before=v_before,
+        coeff_range=coeff_range,
+        c_range=c_range,
+        max_atoms=max_atoms,
+    )
+
+    if not atoms:
+        return []
+
+    def clause_is_sat(clause: List[BoolAtom]) -> bool:
+        s = Solver()
+        if guard_expr is not None:
+            s.add(guard_expr)
+        s.add(*(a.to_z3(vars_list, v_before) for a in clause))
+        return s.check() == sat
+
+    clause_pool: List[List[BoolAtom]] = []
+    seen_clause = set()
+
+    for r in range(1, max_clause_size + 1):
+        for subset in itertools.combinations(atoms, r):
+            uniq = []
+            uniq_keys = set()
+            for a in subset:
+                key = (a.coeffs, a.c)
+                if key not in uniq_keys:
+                    uniq_keys.add(key)
+                    uniq.append(a)
+            if not uniq:
+                continue
+            clause_key = tuple(sorted((a.coeffs, a.c) for a in uniq))
+            if clause_key in seen_clause:
+                continue
+            if not clause_is_sat(uniq):
+                continue
+            clause_pool.append(uniq)
+            seen_clause.add(clause_key)
+            if len(clause_pool) >= max_clause_candidates:
+                break
+        if len(clause_pool) >= max_clause_candidates:
+            break
+
+    if not clause_pool:
+        return []
+
+    def clause_score(clause: List[BoolAtom]) -> Tuple[int, int]:
+        size_score = -len(clause)
+        weight_score = sum(sum(abs(x) for x in a.coeffs) + abs(a.c) for a in clause)
+        return (size_score, weight_score)
+
+    clause_pool.sort(key=clause_score)
+
+    checked = 0
+    for k in range(1, max_clauses + 1):
+        for chosen in itertools.combinations(clause_pool, k):
+            checked += 1
+            if checked > max_dnf_checks:
+                return []
+            clauses = list(chosen)
+            if check_dnf_invariant(vars_list, clauses, guard_expr, trans_constraints, initial_vals):
+                return [format_dnf(clauses, vars_list)]
+
+    return []
+
+
 def collect_candidate_atoms(
     vars_list: List[str],
     guard_expr,
@@ -759,6 +918,17 @@ def synthesize_boolean_dnf_invariant_for_loop(
     if trans_cs is None:
         return synthesize_linear_invariants_for_loop(src, ms, coeff_range, c_range)
 
+    greedy_dnf = _synthesize_boolean_dnf_atoms_first(
+        vars_list,
+        guard_expr=guard_z3,
+        trans_constraints=trans_cs,
+        initial_vals=initial_vals,
+        coeff_range=coeff_range,
+        c_range=c_range,
+    )
+    if greedy_dnf:
+        return greedy_dnf
+
     atoms = collect_candidate_atoms(
         vars_list,
         guard_expr=guard_z3,
@@ -879,4 +1049,30 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if os.environ.get("BOOL_LINEAR_SELFTEST"):
+        sample_src = """
+method Counter(n: int) {
+  var i := 0;
+  while (i < n) {
+    i := i + 1;
+  }
+}
+"""
+        sample_summary = {
+            "method_name": "Counter",
+            "loops": [
+                {
+                    "type": "while",
+                    "condition": "i < n",
+                    "variables": ["i", "n"],
+                }
+            ],
+        }
+        print("Running self-test for boolean + linear synthesis...")
+        print("Source loop guard:", sample_summary["loops"][0]["condition"])
+        print("Boolean DNF attempt:")
+        print(synthesize_boolean_dnf_invariant_for_loop(sample_src, sample_summary))
+        print("Linear fallback attempt:")
+        print(synthesize_linear_invariants_for_loop(sample_src, sample_summary))
+    else:
+        main()

@@ -5,7 +5,7 @@ method Toggle()
         var y := 0;
         var flip := 0;
         while (i < 4) 
-          invariant (-flip <= 0 && -i <= 0 && -x <= 0) || (-flip <= 0 && -i <= 0 && -x <= 0){
+        invariant flip + i <= 5 || 2*flip + i <= 10{
             if (flip == 0) {
                 x := x + 1;
                 y := y + 2;
