@@ -1,4 +1,4 @@
-method ForcedGoodExample(n: int) returns (a: int, b: int, flag: int)
+method Example(n: int) returns (a: int, b: int, flag: int)
 {
     var i := 0;
     a := 0;

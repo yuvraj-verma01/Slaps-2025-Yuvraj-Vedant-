@@ -6,6 +6,9 @@ method TriangularSum(n: int) returns (k: int, sum: int)
   sum := 0;
 
   while k < n
+  // manually added invariants
+    invariant 0 <= k <= n
+    invariant sum == k * (k - 1) / 2
   {
     sum := sum + k;
     k := k + 1;

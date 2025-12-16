@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from z3 import Int, Not, Solver, sat
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.append(str(ROOT))
 sys.path.append(str(ROOT / "week5"))
 sys.path.append(str(ROOT / "week9"))
 
@@ -217,8 +218,9 @@ def synthesize_quadratic_invariants_for_loop(
 
     attempts = 0
     stop = False
+    early_stop = max_invariants * 3  # keep a small buffer so we still sort/score a few options
 
-    for k in range(max_terms, 0, -1):
+    for k in range(1, max_terms + 1):
         combos = list(itertools.combinations(positions, k))
         combo_buckets = [
             [c for c in combos if any(p in quadratic_positions for p in c)],
@@ -265,6 +267,9 @@ def synthesize_quadratic_invariants_for_loop(
                             if s:
                                 found.append((cand, s))
                                 seen.add(cand)
+                                if len(found) >= early_stop:
+                                    stop = True
+                                    break
                 if stop:
                     break
         if stop:

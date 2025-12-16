@@ -28,9 +28,13 @@ class LoopSpec:
 
 
 # regex fallbacks for loop parsing
+# Allow optional invariant/decreases lines between the guard and the loop body.
+# The old pattern expected '{' immediately after the condition, which broke on
+# verified Dafny samples that list invariants first.
 WHILE_RE = re.compile(
     r"while\s*"
-    r"(?:\((?P<cond_paren>[^)]*)\)|(?P<cond_noparen>[^\n{]*))"
+    r"(?:\((?P<cond_paren>[^)]*)\)|(?P<cond_noparen>[^{\n]*))"
+    r"(?:\s*(?:invariant|decreases)[^\n]*\n)*"
     r"\s*(?P<brace>\{)",
     re.MULTILINE,
 )

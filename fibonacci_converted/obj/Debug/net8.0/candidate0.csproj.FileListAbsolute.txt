@@ -1,0 +1,12 @@
+C:\Users\yuvra\OneDrive\Desktop\Monsoon 2025\slaps_project\Slaps-2025-Yuvraj-Vedant-\out_dir\obj\Debug\net8.0\candidate0.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\yuvra\OneDrive\Desktop\Monsoon 2025\slaps_project\Slaps-2025-Yuvraj-Vedant-\out_dir\obj\Debug\net8.0\candidate0.AssemblyInfoInputs.cache
+C:\Users\yuvra\OneDrive\Desktop\Monsoon 2025\slaps_project\Slaps-2025-Yuvraj-Vedant-\out_dir\obj\Debug\net8.0\candidate0.AssemblyInfo.cs
+C:\Users\yuvra\OneDrive\Desktop\Monsoon 2025\slaps_project\Slaps-2025-Yuvraj-Vedant-\out_dir\obj\Debug\net8.0\candidate0.csproj.CoreCompileInputs.cache
+C:\Users\yuvra\OneDrive\Desktop\Monsoon 2025\slaps_project\Slaps-2025-Yuvraj-Vedant-\out_dir\obj\Debug\net8.0\candidate0.sourcelink.json
+C:\Users\yuvra\OneDrive\Desktop\Monsoon 2025\slaps_project\Slaps-2025-Yuvraj-Vedant-\out_dir\obj\Debug\net8.0\candidate0.dll
+C:\Users\yuvra\OneDrive\Desktop\Monsoon 2025\slaps_project\Slaps-2025-Yuvraj-Vedant-\out_dir\obj\Debug\net8.0\refint\candidate0.dll
+C:\Users\yuvra\OneDrive\Desktop\Monsoon 2025\slaps_project\Slaps-2025-Yuvraj-Vedant-\out_dir\obj\Debug\net8.0\candidate0.pdb
+C:\Users\yuvra\OneDrive\Desktop\Monsoon 2025\slaps_project\Slaps-2025-Yuvraj-Vedant-\out_dir\candidate0.deps.json
+C:\Users\yuvra\OneDrive\Desktop\Monsoon 2025\slaps_project\Slaps-2025-Yuvraj-Vedant-\out_dir\candidate0.dll
+C:\Users\yuvra\OneDrive\Desktop\Monsoon 2025\slaps_project\Slaps-2025-Yuvraj-Vedant-\out_dir\obj\Debug\net8.0\ref\candidate0.dll
+C:\Users\yuvra\OneDrive\Desktop\Monsoon 2025\slaps_project\Slaps-2025-Yuvraj-Vedant-\out_dir\candidate0.pdb

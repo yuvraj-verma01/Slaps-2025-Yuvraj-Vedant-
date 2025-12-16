@@ -1,0 +1,63 @@
+{
+  "module": "fibonacci",
+  "functions": [
+    {
+      "name": "nth_fibonacci",
+      "params": [
+        {
+          "name": "n",
+          "type_guess": "int"
+        }
+      ],
+      "ret": {
+        "name": "ret",
+        "type_guess": "int"
+      },
+      "loops": [
+        {
+          "loop_id": 0,
+          "kind": "for",
+          "condition": "i < (n + 1)",
+          "vars_in_condition": [
+            "i",
+            "n"
+          ],
+          "vars_modified": [
+            "curr",
+            "i",
+            "prev1",
+            "prev2"
+          ],
+          "has_mutation": false,
+          "vars_in_scope": [
+            {
+              "name": "curr",
+              "type_guess": "int"
+            },
+            {
+              "name": "i",
+              "type_guess": "int"
+            },
+            {
+              "name": "n",
+              "type_guess": "int"
+            },
+            {
+              "name": "prev1",
+              "type_guess": "int"
+            },
+            {
+              "name": "prev2",
+              "type_guess": "int"
+            },
+            {
+              "name": "ret",
+              "type_guess": "int"
+            }
+          ]
+        }
+      ],
+      "unsupported": []
+    }
+  ]
+}

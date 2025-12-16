@@ -1,0 +1,31 @@
+You are a Dafny assistant. Given Python source, a drafted Dafny translation, and metadata, produce a JSON patch that improves specifications (requires/ensures), types, loop invariants, and decreases. Follow the rules strictly.
+
+Inputs:
+- Python source:
+{python_src}
+
+- Draft Dafny:
+{dafny_src}
+
+- Metadata (loops/vars):
+{metadata_json}
+
+Patch format (JSON only):
+{{
+  "requires": [ ... ],
+  "ensures": [ ... ],
+  "types": {{ "var_or_param": "dafny_type" }},
+  "rewrites": [ {{"from": "len(a)", "to": "|a|"}}, {{"from": "True", "to": "true"}}, {{"from": "False", "to": "false"}} ],
+  "loops": [
+    {{ "loop_id": 0, "invariants": [ ... ], "decreases": "..." }}
+  ]
+}}
+
+Rules:
+- Output JSON only. No code fences, no prose.
+- Use only variables in scope per metadata.
+- Prefer inductive invariants; if unsure, leave invariants empty.
+- Use Dafny syntax: |a| for length, &&, ||, !, ==> for implication.
+- If unsure about decreases, leave null/omit; otherwise provide a well-founded expression.
+- Keep rewrites minimal; do not introduce new identifiers.
+- Do not restate the full program; only fill the patch fields.

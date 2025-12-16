@@ -5,6 +5,8 @@ method SumOfSquares(n: int) returns (i: int, s: int)
   i := 0;
   s := 0;
   while i < n
+    invariant 0 <= i <= n
+    invariant s == i * i
   {
     s := s + 2 * i + 1;
     i := i + 1;
