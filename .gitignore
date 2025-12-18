@@ -126,3 +126,5 @@ docs/build/
 TODO.md
 NOTES.md
 *.todo
+week12/orchestrator.py
+week12/python_to_dafny.py
