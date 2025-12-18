@@ -126,5 +126,10 @@ docs/build/
 TODO.md
 NOTES.md
 *.todo
+
+#py to dfy
 week12/orchestrator
 week12/python_to_dafny.py
+./sum_squares_converted/
+./fibonacci_converted/
+./python_files/
